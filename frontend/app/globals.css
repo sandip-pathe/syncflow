@@ -40,27 +40,27 @@
 /* Custom styles for React Flow components */
 
 .react-flow__controls button {
-  @apply bg-transparent p-2 hover:bg-gray-900 transition-colors w-8 h-8 border-0 outline-none;
+  @apply bg-transparent p-2 hover:bg-slate-100 transition-colors w-8 h-8 border-0 outline-none;
 }
 
 .react-flow__controls-button svg {
-    @apply w-4 h-4 text-white;
+    @apply w-4 h-4 text-slate-700;
 }
 .react-flow__attribution {
   display: none !important;
 }
 
 .react-flow__minimap {
-  @apply bg-gray-900 bg-opacity-80 backdrop-blur-md rounded-md shadow-2xl;
+  @apply bg-white rounded-md shadow-sm;
   border: none;
 }
 
 /* Style the mask that shows the current viewport */
 .react-flow__minimap-mask {
-  @apply bg-white bg-opacity-10;
+  @apply bg-slate-200 bg-opacity-40;
   border: none;
   border-radius: 4px;
-  fill-opacity: 0.05;
+  fill-opacity: 0.1;
 }
 
 /* You can even add a transition for a smoother feel */

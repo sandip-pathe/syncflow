@@ -16,7 +16,6 @@ import {
   Loader2,
   Square,
   RotateCcw,
-  Wrench,
   Pause,
   PlayCircle,
   RefreshCw,
@@ -24,17 +23,23 @@ import {
   Home,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useState, useEffect, useRef } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { mockNodes, mockEdges } from "@/lib/mock-data";
-import { api, apiUrl } from "@/lib/api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { apiUrl } from "@/lib/api";
 import Link from "next/link";
+import {
+  approvalFromPendingApproval,
+  normalizeBackendEvents,
+  resetWorkflowNodeRuntime,
+} from "@/lib/workflow-events";
+import { RunInputModal } from "@/components/modals/run-input";
 
 export function ExecutionToolbar() {
   const {
     mode,
     setMode,
     workflowName,
+    executionBackend,
     toggleLeftSidebar,
     leftSidebarOpen,
     addEvent,
@@ -44,149 +49,73 @@ export function ExecutionToolbar() {
     edges,
     workflowId,
     setExecutionId,
+    setExecutionBackend,
     executionId,
     clearEvents,
+    applyExecutionEvent,
+    setCurrentApproval,
+    setOutput,
   } = useWorkflowStore();
-  const [isRunModalOpen, setIsRunModalOpen] = useState(false);
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const queryClient = useQueryClient();
+  const [runInputOpen, setRunInputOpen] = useState(false);
+  const isDiligenceWorkflow =
+    workflowId === "template-private-market-diligence";
 
-  // Migration function to fix old nodes
-  const fixNodeConfigs = () => {
-    const updatedNodes = nodes.map((node) => {
-      const config = (node.data.config || {}) as any;
+  const runDefaultInput = useMemo(() => {
+    const triggerNode = nodes.find((node) => node.type === "trigger");
+    const triggerConfig = triggerNode?.data?.config as any;
+    if (triggerConfig?.input_text) return triggerConfig.input_text;
+    if (!isDiligenceWorkflow) return "";
 
-      // Check if config has name field, if not add it based on node type
-      if (!config.name) {
-        const label = node.data.label || "Unnamed";
-        let updatedConfig: any = {};
+    return "Company memo: Revenue grew 42% YoY, gross retention is above 90%, enterprise pipeline is concentrated in six accounts, and AI automation is expected to drive expansion margin.";
+  }, [isDiligenceWorkflow, nodes]);
 
-        // Add other required fields based on node type
-        switch (node.type) {
-          case "trigger":
-            updatedConfig = {
-              ...config,
-              name: label,
-              type: config.type || "manual",
-              input_text: config.input_text || "",
-            };
-            break;
-          case "agent":
-            updatedConfig = {
-              ...config,
-              name: label,
-              system_instructions: config.system_instructions || "",
-              temperature: config.temperature ?? 0.7,
-              expected_output_format: config.expected_output_format || "text",
-            };
-            break;
-          case "api_call":
-            updatedConfig = {
-              ...config,
-              name: label,
-              url: config.url || "",
-              method: config.method || "POST",
-              headers: config.headers || {},
-              body: config.body || {},
-            };
-            break;
-          case "approval":
-            updatedConfig = {
-              ...config,
-              name: label,
-              description: config.description || "Please review and approve",
-            };
-            break;
-          case "conditional":
-            updatedConfig = {
-              ...config,
-              name: label,
-              condition_expression: config.condition_expression || "",
-            };
-            break;
-          case "eval":
-            updatedConfig = {
-              ...config,
-              name: label,
-              eval_type: config.eval_type || "schema",
-              config: config.config || {},
-              on_failure: config.on_failure || "block",
-            };
-            break;
-          case "timer":
-            updatedConfig = {
-              ...config,
-              name: label,
-              duration_seconds: config.duration_seconds ?? 30,
-            };
-            break;
-          case "event":
-            updatedConfig = {
-              ...config,
-              name: label,
-              operation: config.operation || "publish",
-              channel: config.channel || "",
-            };
-            break;
-          case "merge":
-            updatedConfig = {
-              ...config,
-              name: label,
-              merge_strategy: config.merge_strategy || "combine",
-            };
-            break;
-          case "end":
-            updatedConfig = {
-              ...config,
-              name: label,
-              capture_output: config.capture_output ?? true,
-              show_output: config.show_output ?? true,
-            };
-            break;
-          default:
-            updatedConfig = { ...config, name: label };
-        }
+  const handleRunWorkflow = (inputData: { input_text: string; source_name?: string }) => {
+    setRunInputOpen(false);
+    setNodes(resetWorkflowNodeRuntime(nodes));
+    setCurrentApproval(null);
+    setOutput(null);
+    executeMutation.mutate(inputData);
+  };
+
+  const persistedPayload = useMemo(
+    () => ({
+      name: workflowName,
+      nodes: nodes.map(({ id, type, position, data }) => {
+        const {
+          status: _status,
+          lastResult: _lastResult,
+          cost: _cost,
+          executionTime: _executionTime,
+          error: _error,
+          ...persistedData
+        } = data as any;
 
         return {
-          ...node,
-          data: {
-            ...node.data,
-            config: updatedConfig,
-          },
+          id,
+          type,
+          position,
+          data: persistedData,
         };
-      }
+      }),
+      edges: edges.map(({ id, source, target, sourceHandle, targetHandle }) => ({
+        id,
+        source,
+        target,
+        sourceHandle,
+        targetHandle,
+      })),
+    }),
+    [edges, nodes, workflowName]
+  );
 
-      return node;
-    });
+  const persistedSnapshot = useMemo(
+    () => JSON.stringify(persistedPayload),
+    [persistedPayload]
+  );
 
-    setNodes(updatedNodes);
-    toast.success("Fixed node configurations!", {
-      description: "All nodes now have required fields.",
-    });
-  };
   const executeMutation = useMutation({
     mutationFn: async (inputData: any) => {
       if (!workflowId) throw new Error("No workflow ID.");
-
-      // First, fetch what's actually stored in the database
-      const storedWorkflow = await api.workflows.get(workflowId);
-
-      console.log("🗄️ Workflow stored in DB:", storedWorkflow);
-      console.log("🗄️ DB nodes:", storedWorkflow.definition?.nodes);
-
-      // Debug: Log current nodes
-      console.log("🔍 Current nodes in store:", nodes);
-      console.log(
-        "🔍 Node types:",
-        nodes.map((n) => ({
-          id: n.id,
-          type: n.type,
-          label: n.data.label,
-          config: n.data.config,
-          hasNameInConfig: !!(n.data.config as any)?.name,
-        }))
-      );
-      console.log("🔍 Full JSON:", JSON.stringify(nodes, null, 2));
 
       return fetch(apiUrl(`api/workflows/${workflowId}/execute`), {
         method: "POST",
@@ -195,7 +124,6 @@ export function ExecutionToolbar() {
       }).then(async (res) => {
         if (!res.ok) {
           const errorData = await res.json();
-          console.error("❌ Execution error:", errorData);
 
           if (errorData.detail?.errors) {
             // Open left sidebar to show errors
@@ -219,7 +147,7 @@ export function ExecutionToolbar() {
             });
 
             // Show user-friendly error toast
-            toast.error("⚠️ Workflow Validation Failed", {
+            toast.error("Workflow validation failed", {
               description: `Found ${errorData.detail.errors.length} issue(s). Check the event log for details.`,
               duration: 5000,
             });
@@ -244,7 +172,7 @@ export function ExecutionToolbar() {
           }
 
           // Generic error
-          toast.error("❌ Execution Failed", {
+          toast.error("Execution failed", {
             description:
               errorData.message ||
               "An unexpected error occurred. Please try again.",
@@ -257,13 +185,38 @@ export function ExecutionToolbar() {
     },
 
     onSuccess: (data) => {
-      toast.success("Execution started!", {
+      clearEvents();
+      setExecutionId(data.execution_id);
+      setExecutionBackend(data.execution_backend || "temporal");
+
+      normalizeBackendEvents(data.events).forEach((event) => {
+        applyExecutionEvent(event);
+      });
+
+      const pendingApproval = approvalFromPendingApproval(
+        data.pending_approval
+      );
+      if (pendingApproval) {
+        setCurrentApproval(pendingApproval);
+      }
+
+      if (data.output) {
+        setOutput({ status: data.status, result: data.output });
+      }
+
+      if (data.status === "completed") {
+        setMode("completed");
+      } else if (data.status === "waiting_approval") {
+        setMode("paused");
+      } else if (data.status === "failed") {
+        setMode("failed");
+      } else {
+        setMode("executing");
+      }
+
+      toast.success(data.status === "completed" ? "Execution completed" : "Execution started", {
         description: `ID: ${data.execution_id}`,
       });
-      setExecutionId(data.execution_id);
-      setMode("executing");
-      clearEvents();
-      setIsRunModalOpen(false);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -331,25 +284,34 @@ export function ExecutionToolbar() {
         description: `New execution: ${data.execution_id}`,
       });
       setExecutionId(data.execution_id);
-      setMode("executing");
+      setExecutionBackend(data.execution_backend || "temporal");
       clearEvents();
+      normalizeBackendEvents(data.events).forEach((event) => {
+        applyExecutionEvent(event);
+      });
+      const pendingApproval = approvalFromPendingApproval(
+        data.pending_approval
+      );
+      if (pendingApproval) {
+        setCurrentApproval(pendingApproval);
+      }
+      if (data.output) {
+        setOutput({ status: data.status, result: data.output });
+      }
+      setMode(
+        data.status === "completed"
+          ? "completed"
+          : data.status === "waiting_approval"
+          ? "paused"
+          : "executing"
+      );
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const saveMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: (payload: typeof persistedPayload) => {
       if (!workflowId) throw new Error("No workflow ID.");
-      const payload = {
-        name: workflowName,
-        nodes: nodes.map(({ id, type, position, data }) => ({
-          id,
-          type,
-          position,
-          data,
-        })),
-        edges: edges.map(({ id, source, target }) => ({ id, source, target })),
-      };
       return fetch(apiUrl(`api/workflows/${workflowId}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -358,16 +320,23 @@ export function ExecutionToolbar() {
         res.ok ? res.json() : Promise.reject(new Error("Failed to save."))
       );
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["workflow", workflowId] });
-    },
-    onError: (e: Error) => console.error("Auto-save failed:", e.message),
+    onError: () => undefined,
   });
 
   // Auto-save when nodes or edges change
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
+  const lastAutosaveSnapshotRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!workflowId || nodes.length === 0) return;
+    if (!workflowId || nodes.length === 0 || mode !== "design") return;
+
+    if (lastAutosaveSnapshotRef.current === null) {
+      lastAutosaveSnapshotRef.current = persistedSnapshot;
+      return;
+    }
+
+    if (lastAutosaveSnapshotRef.current === persistedSnapshot) {
+      return;
+    }
 
     // Debounce saves by 2 seconds
     if (saveTimeoutRef.current) {
@@ -375,7 +344,8 @@ export function ExecutionToolbar() {
     }
 
     saveTimeoutRef.current = setTimeout(() => {
-      saveMutation.mutate();
+      lastAutosaveSnapshotRef.current = persistedSnapshot;
+      saveMutation.mutate(persistedPayload);
     }, 2000);
 
     return () => {
@@ -383,7 +353,14 @@ export function ExecutionToolbar() {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [nodes, edges, workflowName, workflowId, saveMutation]);
+  }, [
+    mode,
+    nodes.length,
+    persistedPayload,
+    persistedSnapshot,
+    saveMutation,
+    workflowId,
+  ]);
 
   // Export workflow as JSON
   const handleExport = () => {
@@ -448,7 +425,6 @@ export function ExecutionToolbar() {
           description: `Loaded ${importedData.nodes.length} nodes`,
         });
 
-        setIsImportModalOpen(false);
       } catch (error) {
         toast.error("Import failed", {
           description:
@@ -461,7 +437,7 @@ export function ExecutionToolbar() {
 
   return (
     <>
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-10 bg-black p-2 rounded-xl flex items-center gap-2 text-white">
+      <div className="fixed top-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-slate-900 shadow-sm">
         <TooltipProvider>
           {/* Home/Logo Button */}
           <Tooltip>
@@ -470,7 +446,7 @@ export function ExecutionToolbar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="hover:bg-gray-800"
+                  className="h-8 w-8 hover:bg-slate-100"
                 >
                   <Home className="w-4 h-4" />
                 </Button>
@@ -478,25 +454,21 @@ export function ExecutionToolbar() {
             </TooltipTrigger>
             <TooltipContent>Back to Dashboard</TooltipContent>
           </Tooltip>
-          <Separator orientation="vertical" className="h-6" />
-          <div className="px-3">
-            <h1 className="text-sm font-semibold">{workflowName}</h1>
+          <Separator orientation="vertical" className="h-6 bg-slate-200" />
+          <div className="flex items-center gap-2 px-2">
+            <h1 className="max-w-48 truncate text-sm font-semibold">
+              {workflowName}
+            </h1>
+            <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700">
+              {executionBackend === "temporal" ? "Temporal" : "Local Demo"}
+            </span>
           </div>
-          <Separator orientation="vertical" className="h-6" />
+          <Separator orientation="vertical" className="h-6 bg-slate-200" />
           <Button
-            onClick={() => {
-              // Get input from trigger node config
-              const triggerNode = nodes.find((n) => n.type === "trigger");
-              const triggerConfig = triggerNode?.data?.config as any;
-              // Use input_text if available, otherwise fall back to input_variables
-              const inputVars = triggerConfig?.input_text
-                ? { input_text: triggerConfig.input_text }
-                : triggerConfig?.input_variables || {};
-              console.log("🎬 Executing with input:", inputVars);
-              executeMutation.mutate(inputVars);
-            }}
+            data-testid="workflow-run-button"
+            onClick={() => setRunInputOpen(true)}
             disabled={mode === "executing" || executeMutation.isPending}
-            className="bg-gray-50 hover:bg-gray-100 text-green-900"
+            className="h-8 bg-emerald-600 px-3 text-white hover:bg-emerald-700"
           >
             {executeMutation.isPending ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -529,7 +501,7 @@ export function ExecutionToolbar() {
           )}
 
           {/* Resume Button */}
-          {mode === "paused" && (
+          {mode === "paused" && executionBackend !== "local" && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -576,20 +548,25 @@ export function ExecutionToolbar() {
             <TooltipTrigger asChild>
               <Button
                 variant="outline"
-                className="bg-gray-700 text-white hover:bg-gray-600"
+                className="h-8 w-8 border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
                 size="icon"
                 onClick={() => setMode("design")}
                 disabled={mode === "design"}
               >
-                <Square className="w-4 h-4" color="white" />
+                <Square className="w-4 h-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Stop Execution</TooltipContent>
           </Tooltip>
-          <Separator orientation="vertical" className="h-6" />
+          <Separator orientation="vertical" className="h-6 bg-slate-200" />
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={handleExport}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 hover:bg-slate-100"
+                onClick={handleExport}
+              >
                 <Download className="w-4 h-4" />
               </Button>
             </TooltipTrigger>
@@ -600,6 +577,7 @@ export function ExecutionToolbar() {
               <Button
                 variant="ghost"
                 size="icon"
+                className="h-8 w-8 hover:bg-slate-100"
                 onClick={() => document.getElementById("import-file")?.click()}
               >
                 <Upload className="w-4 h-4" />
@@ -619,10 +597,11 @@ export function ExecutionToolbar() {
               <Button
                 variant="ghost"
                 size="icon"
+                className="h-8 w-8 hover:bg-slate-100"
                 onClick={() => {
-                  if (confirm("Reset canvas to default?")) {
-                    setNodes(mockNodes);
-                    setEdges(mockEdges);
+                  if (confirm("Clear this canvas?")) {
+                    setNodes([]);
+                    setEdges([]);
                   }
                 }}
               >
@@ -631,27 +610,13 @@ export function ExecutionToolbar() {
             </TooltipTrigger>
             <TooltipContent>Reset Canvas</TooltipContent>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={fixNodeConfigs}
-                className="text-yellow-400 hover:text-yellow-300"
-              >
-                <Wrench className="w-4 h-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              Fix Node Configs (Add Missing Fields)
-            </TooltipContent>
-          </Tooltip>
-          <Separator orientation="vertical" className="h-6" />
+          <Separator orientation="vertical" className="h-6 bg-slate-200" />
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant={leftSidebarOpen ? "secondary" : "ghost"}
                 size="icon"
+                className="h-8 w-8"
                 onClick={toggleLeftSidebar}
               >
                 <Sidebar className="w-4 h-4" />
@@ -661,6 +626,14 @@ export function ExecutionToolbar() {
           </Tooltip>
         </TooltipProvider>
       </div>
+      <RunInputModal
+        open={runInputOpen}
+        defaultValue={runDefaultInput}
+        isDiligenceWorkflow={isDiligenceWorkflow}
+        isRunning={executeMutation.isPending}
+        onClose={() => setRunInputOpen(false)}
+        onRun={handleRunWorkflow}
+      />
     </>
   );
 }

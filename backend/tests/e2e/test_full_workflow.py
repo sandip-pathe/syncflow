@@ -1,10 +1,16 @@
 import pytest
 import httpx
 import asyncio
-import time
+import os
 
-# Mark all tests in this file as asyncio
-pytestmark = pytest.mark.asyncio
+pytestmark = [
+    pytest.mark.asyncio,
+    pytest.mark.e2e,
+    pytest.mark.skipif(
+        os.getenv("RUN_E2E") != "1",
+        reason="requires a running backend, database, Redis, Temporal, and agent credentials",
+    ),
+]
 
 # Base URL for our running service
 BASE_URL = "http://localhost:8000"
@@ -66,7 +72,7 @@ async def test_create_and_run_simple_workflow():
 
         # --- 2. Create Workflow ---
         print("Creating workflow...")
-        create_response = await client.post(f"{BASE_URL}/workflows/", json=SIMPLE_AGENT_WORKFLOW)
+        create_response = await client.post(f"{BASE_URL}/api/workflows/", json=SIMPLE_AGENT_WORKFLOW)
         assert create_response.status_code == 200
         workflow_data = create_response.json()
         workflow_id = workflow_data.get("id")
@@ -75,7 +81,7 @@ async def test_create_and_run_simple_workflow():
 
         # --- 3. Execute Workflow ---
         print("Executing workflow...")
-        execute_response = await client.post(f"{BASE_URL}/workflows/{workflow_id}/execute", json={"input_data": {}})
+        execute_response = await client.post(f"{BASE_URL}/api/workflows/{workflow_id}/execute", json={"input_data": {}})
         assert execute_response.status_code == 200
         execution_data = execute_response.json()
         execution_id = execution_data.get("execution_id")
@@ -89,7 +95,7 @@ async def test_create_and_run_simple_workflow():
         for i in range(180): # Poll for up to 20 seconds
             await asyncio.sleep(1)
             print(f"  ...polling attempt {i+1}")
-            status_response = await client.get(f"{BASE_URL}/executions/{execution_id}")
+            status_response = await client.get(f"{BASE_URL}/api/executions/{execution_id}")
             
             if status_response.status_code == 200:
                 status_data = status_response.json()

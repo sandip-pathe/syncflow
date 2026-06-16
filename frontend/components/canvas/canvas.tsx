@@ -83,6 +83,7 @@ const getDefaultConfig = (type: NodeType): SpecificNodeConfig => {
       return {
         name: "New Approval",
         description: "Please review and approve",
+        approver_email: "approvals@syncflow.local",
       } as ApprovalConfig;
     case "conditional":
       return {
@@ -137,12 +138,17 @@ function WorkflowCanvasInner() {
     layoutType,
     setLayoutType,
     mode,
+    leftSidebarOpen,
+    selectedNodeId,
+    output,
   } = useWorkflowStore();
 
   const [nodes, setNodes, onNodesChange] = useNodesState(storeNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(storeEdges as Edge[]);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
+  const hasSelectedNode = Boolean(selectedNodeId);
+  const hasOutput = Boolean(output);
 
   useEffect(() => {
     setNodes(storeNodes);
@@ -151,6 +157,23 @@ function WorkflowCanvasInner() {
   useEffect(() => {
     setEdges(storeEdges as Edge[]);
   }, [storeEdges, setEdges]);
+
+  useEffect(() => {
+    if (storeNodes.length === 0) return;
+
+    const timeoutId = window.setTimeout(() => {
+      fitView({ padding: 0.18, duration: 250 });
+    }, 80);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    fitView,
+    hasOutput,
+    hasSelectedNode,
+    leftSidebarOpen,
+    mode,
+    storeNodes.length,
+  ]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -244,36 +267,38 @@ function WorkflowCanvasInner() {
         fitViewOptions={{ padding: 0.15 }}
         minZoom={0.2}
         maxZoom={4}
-        className="bg-gray-50"
+        className="bg-[#f8fafc]"
       >
-        <Background color="#94a3b8" gap={15} />
+        <Background color="#d8e2ee" gap={20} size={1} />
         <Controls
-          className="bg-black rounded-md shadow-md p-2"
+          className="rounded-md border border-slate-200 bg-white p-1 shadow-sm [&>button]:border-0 [&>button]:bg-white [&>button]:text-slate-600 [&>button:hover]:bg-slate-50"
           orientation="horizontal"
           position="bottom-center"
         />
 
         <MiniMap
-          className="bg-black backdrop-blur-sm rounded-lg shadow-xl border-0"
-          nodeStrokeColor={() => "#ffffff"}
+          className="rounded-md border border-slate-200 bg-white shadow-sm"
+          style={{ width: 180, height: 118 }}
+          maskColor="rgba(15, 23, 42, 0.06)"
+          nodeStrokeColor={() => "#64748b"}
           nodeBorderRadius={8}
           nodeStrokeWidth={2}
           pannable
           zoomable
           nodeColor={(node) => {
             const colors = {
-              trigger: "#22c55e",
-              agent: "#a855f7",
-              api_call: "#3b82f6",
-              approval: "#f97316",
-              conditional: "#4f46e5",
-              eval: "#eab308",
-              merge: "#6366f1",
-              timer: "#06b6d4",
-              event: "#ef4444",
-              end: "#1f2937",
+              trigger: "#059669",
+              agent: "#0f766e",
+              api_call: "#0284c7",
+              approval: "#d97706",
+              conditional: "#2563eb",
+              eval: "#1d4ed8",
+              merge: "#475569",
+              timer: "#0891b2",
+              event: "#0d9488",
+              end: "#0f172a",
             };
-            return colors[node.type as NodeType] || "#6b7280";
+            return colors[node.type as NodeType] || "#64748b";
           }}
         />
 
@@ -283,7 +308,7 @@ function WorkflowCanvasInner() {
             variant={layoutType === "dag" ? "default" : "outline"}
             size="sm"
             onClick={handleLayoutToggle}
-            className="shadow-md select-none"
+            className="select-none border border-slate-200 bg-white text-slate-800 shadow-sm hover:bg-slate-50"
           >
             <Layers className="w-4 h-4 mr-2" />
             {layoutType === "dag" ? "DAG Mode" : "Event Hub Mode"}

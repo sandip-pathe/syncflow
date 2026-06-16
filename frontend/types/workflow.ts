@@ -73,6 +73,8 @@ export interface EndConfig {
 export interface ApprovalConfig {
   name: string;
   description: string;
+  approver_email?: string;
+  approvers?: string[];
 }
 
 export interface EvalConfig {

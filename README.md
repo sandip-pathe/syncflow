@@ -1,248 +1,255 @@
-<div align="center">
+# SyncFlow: Durable AI Workflow Builder for Approval-Critical Enterprise Workflows
 
-# 🎯 Agentic Orchestration Builder
+This project is a proof-of-work for the AI workflow builder category. It is not
+a VectorShift clone. It explores the reliability layer underneath visual AI
+workflow tools: local demo execution, durable orchestration, human approval,
+eval gates, cost visibility, and audit-ready run history.
 
-### Visual, Event-Driven AI Workflow Orchestration Platform
+The flagship demo is a private-market diligence workflow:
 
-[![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-lyzr.anaya.legal-00d4ff?style=for-the-badge)](https://lyzr-alpha.vercel.app/)
-[![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github)](https://github.com/sandip-pathe/lyzr)
+1. Paste investment memo or diligence notes.
+2. Extract material claims, risks, and assumptions.
+3. Run an eval gate for completeness and confidence.
+4. Pause for human approval.
+5. Generate an IC memo section.
+6. Show final output with audit, cost, latency, and approval metadata.
 
-**Built in 6 days** | Complex AI workflows that feel like magic ✨
+## Screenshots
 
-[Features](#-key-features) • [Architecture](#-architecture) • [Quick Start](#-quick-start) • [Tech Stack](#-tech-stack) • [Demo](#-live-demo)
+### Dashboard
 
-</div>
+![SyncFlow dashboard](docs/assets/syncflow-dashboard.png)
 
+### Operator Builder
 
+![SyncFlow builder canvas](docs/assets/syncflow-builder.png)
 
-## 🎬 Live Demo
+### Completed Run Report
 
-**🌐 Try it now:** [lyzr-alpha.vercel.app](https://lyzr-alpha.vercel.app/)
+![SyncFlow completed run report](docs/assets/syncflow-report.png)
 
-> Experience the full power of hybrid AI-agentic orchestration with our live deployment. Build, execute, and monitor complex workflows in real-time.
+## Why This Exists
 
+Visual AI builders make it easy to connect nodes. The hard part starts after the
+first demo: teams need to know what happened, who approved it, what failed, how
+much it cost, and whether the workflow can survive long-running business
+processes.
 
+This repo focuses on that trust layer:
 
-## 💡 The Problem & Our Solution
+- **Local Demo Mode:** reviewers can run the flagship workflow without Temporal,
+  Redis, OpenAI, Docker, or cloud credentials.
+- **Temporal Mode:** the production path still uses Temporal for durable,
+  long-running workflow execution.
+- **Human Approval:** workflows can pause for review and resume with an audit
+  trail.
+- **Eval Gates:** model outputs can be scored before downstream actions run.
+- **Execution Timeline:** every node event is visible in the UI.
+- **Cost and Latency Metadata:** demo outputs include model, token, cost, and
+  latency fields.
 
-### ⚠️ The Challenge
-Existing workflow tools (Airflow, n8n, Zapier) are built for **predictable, deterministic tasks**. They fail when dealing with the **non-deterministic, adaptive nature** of modern AI agents.
-
-### ✨ Our Approach
-A **hybrid orchestrator** combining:
-- ✅ **Reliability** of deterministic workflow engines (Temporal)
-- ⚡ **Flexibility** of event-driven architecture (Redis Pub/Sub)
-- 🎯 **Single, auditable workflow** for both traditional logic and intelligent AI agents
-
-### 🏆 The Result
-A full-stack platform that orchestrates **both deterministic and non-deterministic AI workflows** with:
-- 🎨 Visual canvas for workflow design
-- 🤖 Multi-model AI agent support
-- 👤 Human-in-the-loop approval steps
-- 📊 Real-time state management
-- 🔍 Complete observability
-
-
-
-## 🏗️ Architecture
-
-### System Overview
-
-```mermaid
-graph TD
-    subgraph Frontend
-        A[React Flow Canvas] --> B{Run Workflow}
-        B --> C[RunWorkflowModal]
-        C --> D{Execute}
-        D --> E[useMutation]
-    end
-    
-    subgraph "API Layer"
-        F[FastAPI Server] --> G[Workflow Controller]
-        G --> H["/execute"]
-    end
-    
-    subgraph "Execution Engine"
-        I[Temporal Worker] --> J[OrchestrationWorkflow]
-        J --> K[Activity Execution]
-    end
-    
-    subgraph Infrastructure
-        L[Redis Pub/Sub] --> M[Event Dispatcher]
-        N[PostgreSQL] --> O[State Store]
-        P[Agent APIs] --> Q[Decision Engine]
-    end
-    
-    subgraph "Real-time Updates"
-        R[WebSocket Client] --> S[useWorkflowWebSocket]
-        S --> T[EventLogStream]
-        S --> U[OutputSidebar]
-    end
-    
-    E --> H
-    H --> J
-    J --> L
-    K --> P
-    M --> R
-```
-
-
-### 🔄 Data Flow
-
-```
-User Design → FastAPI → Temporal → AI Agent → Redis Event → WebSocket → Real-time UI Update
-```
-
-1. **Design:** Visual workflow creation on React Flow canvas
-2. **Execute:** Workflow sent to FastAPI backend with input data
-3. **Orchestrate:** Temporal creates durable execution instance
-4. **Process:** Worker executes AI Agent nodes (GPT-4o, Lyzr, custom agents)
-5. **Event:** Task completion published to Redis Pub/Sub
-6. **Monitor:** Frontend receives WebSocket events, updates canvas in real-time
-7. **HITL:** Workflow pauses for human approval when needed
-8. **Resume:** Approved workflows continue to completion
-
-
-
-## ✨ Key Features
-
-
-### 🎨 Visual Builder
-Drag-and-drop canvas powered by **React Flow** for intuitive workflow design
-
-### 🔀 Hybrid Orchestration
-Seamlessly blend deterministic nodes (HTTP, timers) with non-deterministic AI agents
-
-### 👥 Human-in-the-Loop
-Pause workflows for critical approvals via Slack, email, or web interface
-
-</td>
-<td width="50%">
-
-### 📊 Real-time Monitoring
-Live event streaming via WebSockets with complete execution visibility
-
-### 📈 Agent Metrics
-Track performance, latency, reliability, and cost per execution
-
-### 💾 Durable Execution
-Temporal-powered stateful workflows with full auditability and replay capability
-
-</td>
-</tr>
-</table>
-
-
-
-## 🛠️ Tech Stack
+## Quick Start
 
 ### Frontend
-![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
-![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
-![React Flow](https://img.shields.io/badge/React_Flow-FF0072?style=for-the-badge&logo=react&logoColor=white)
-
-### Backend
-![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
-![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![Temporal](https://img.shields.io/badge/Temporal-000000?style=for-the-badge&logo=temporal&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
-![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)
-
-### AI & Infrastructure
-![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-![WebSocket](https://img.shields.io/badge/WebSocket-010101?style=for-the-badge&logo=socket.io&logoColor=white)
-
-**Optimized for:** Reliability • Composability • Low Latency
-
-
-## 🚀 Vision Beyond the Hackathon
-
-This prototype is the foundation for a **no-code orchestration layer for enterprise AI workflows**.
-
-### Roadmap
-- 🏢 **Multi-tenant Architecture:** Isolation and security for enterprise deployments
-- 📚 **Version Control:** Git-like workflow versioning and rollback
-- 🎨 **Template Library:** Pre-built agent workflows for common business processes
-- 🔌 **Plugin Ecosystem:** Community-contributed nodes and integrations
-- 🌐 **Global Deployment:** Edge execution for latency-sensitive workflows
-
-**Think:** Zapier meets LangChain, with enterprise-grade auditability and durability.
-
-
-
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Docker & Docker Compose
-- Node.js 18+
-- Python 3.11+
-
-### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/sandip-pathe/lyzr.git
-cd lyzr
-
-# Configure environment variables
-cp .env.example .env
-# Edit .env with your database, Redis, Temporal, and AI model credentials
-
-# Launch the platform
-docker-compose up --build
+cd frontend
+npm install
+npm run dev
 ```
 
-### Access Points
+Open `http://localhost:3000`.
 
-| Service | URL | Description |
-|---------|-----|-------------|
-| **Frontend** | `http://localhost:3000` | Visual workflow builder & dashboard |
-| **Backend API** | `http://localhost:8000/docs` | Interactive API documentation |
-| **Temporal UI** | `http://localhost:8088` | Workflow execution monitoring |
+### Backend
 
+For the reviewer-friendly local demo:
 
+```bash
+cd backend
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements-dev.txt
+$env:PYTHONIOENCODING="utf-8"
+$env:EXECUTION_BACKEND="local"
+uvicorn app.main:app --reload --port 8000
+```
 
-## 🎯 Why It's Different
+`EXECUTION_BACKEND=local` is the default. It uses SQLite defaults and
+deterministic local outputs, so no external services are required.
 
-> Every AI orchestration platform focuses on the **agents themselves**. We focus on the **coordination logic** — the missing layer between intelligence and execution.
+For the production-style Temporal path:
 
-### Our Unique Approach
-- 🎯 **Agents as Components:** Treat AI agents as powerful but unpredictable units within a reliable framework
-- 🔧 **Reliability First:** Deterministic orchestration for non-deterministic AI
-- 📊 **Full Observability:** No black boxes — see every step, every decision
-- 🏢 **Enterprise-Ready:** Auditability, durability, and compliance built-in
+```bash
+$env:EXECUTION_BACKEND="temporal"
+$env:DATABASE_URL="<postgres-url>"
+$env:REDIS_URL="<redis-url>"
+$env:TEMPORAL_HOST="<temporal-host>"
+$env:TEMPORAL_NAMESPACE="<temporal-namespace>"
+$env:OPENAI_API_KEY="<openai-key>"
+uvicorn app.main:app --reload --port 8000
+```
 
+## Demo Walkthrough
 
-## 👨‍💻 Team & Credits
+1. Open the dashboard.
+2. Choose **Private Market Diligence Review**.
+3. Click **Run**.
+4. Watch the timeline update as nodes start and complete.
+5. Review the Partner Review approval modal.
+6. Approve the risk framing.
+7. Inspect the generated IC memo and audit metrics.
 
-**Solo Build** by [Sandip Pathe](https://github.com/sandip-pathe)
+The demo should be explainable in 60-90 seconds:
 
-Built in **6 days** with:
-- ☕ Lots of coffee
-- 🎵 Late-night coding sessions
-- 💪 Passion for robust AI systems
+> This is an AI workflow builder focused on trust. It can run locally for easy
+> review, but the production path keeps Temporal for durable execution. The demo
+> extracts diligence risks, runs an eval, pauses for human approval, and generates
+> an IC memo with audit, cost, and latency metadata.
 
+## Application Blurb
 
+I had an older AI orchestration prototype and rebuilt it around a question that
+matters for AI workflow builders: once users can visually build workflows, how
+do you make those workflows trustworthy enough for enterprise work? This version
+adds local demo execution, Temporal-backed production architecture, human
+approval, eval gates, and audit/cost/latency visibility around a private-market
+diligence workflow.
 
-## 📝 License
+## Architecture
 
->© 2025 Sandip Pathe – All rights reserved. For evaluation and demonstration only.
+```mermaid
+flowchart LR
+    UI[Next.js + React Flow Builder]
+    API[FastAPI API]
+    Local[Local Demo Executor]
+    Temporal[Temporal Workflow]
+    DB[(Workflow DB)]
+    Events[Redis Event Bus + WebSockets]
+    Reviewer[Human Approval]
 
----
+    UI --> API
+    API --> DB
+    API --> Local
+    API --> Temporal
+    Temporal --> Events
+    Events --> UI
+    Local --> UI
+    Local --> Reviewer
+    Reviewer --> API
+```
 
-<div align="center">
+Local mode and Temporal mode share the same workflow definition shape. The
+execution backend changes, not the builder model.
 
-### ⭐ Star this repo if you find it useful!
+## Technical Documentation
 
-**Built with ❤️ for the future of AI orchestration**
+Current reviewer-facing docs live in [`docs/`](docs/README.md):
 
-[![GitHub Stars](https://img.shields.io/github/stars/sandip-pathe/lyzr?style=social)](https://github.com/sandip-pathe/lyzr)
-[![GitHub Forks](https://img.shields.io/github/forks/sandip-pathe/lyzr?style=social)](https://github.com/sandip-pathe/lyzr/fork)
+- [Architecture](docs/architecture.md): execution modes, approval flow, frontend state, and trade-offs.
+- [Local Demo Runbook](docs/local-demo-runbook.md): exact setup, run steps, QA commands, and troubleshooting.
+- [API And Events Reference](docs/api-and-events.md): endpoints, response shapes, event names, and node semantics.
+- [Demo Script](docs/demo-script.md): 60-90 second walkthrough and application positioning.
+- [Project Report](docs/project-report.md): shipped details, product learnings, engineering lessons, QA summary, and next steps.
+- [Project Report PDF](docs/assets/syncflow-project-report.pdf): printable version of the project report.
 
-[🚀 Live Demo](https://lyzr-alpha.vercel.app/) • [📖 Documentation](#) • [🐛 Report Bug](#) • [💡 Request Feature](#)
+## API Surface
 
-</div>
+`POST /api/workflows/{workflow_id}/execute`
+
+Base response:
+
+```json
+{
+  "execution_id": "...",
+  "workflow_id": "...",
+  "status": "running",
+  "execution_backend": "temporal"
+}
+```
+
+Local mode may also return:
+
+```json
+{
+  "execution_backend": "local",
+  "events": [],
+  "output": {},
+  "pending_approval": {}
+}
+```
+
+`POST /api/approvals/{execution_id}/approve`
+
+Local mode may return continuation events and final output:
+
+```json
+{
+  "status": "approved",
+  "execution_status": "completed",
+  "execution_backend": "local",
+  "events": [],
+  "output": {}
+}
+```
+
+## Quality Gates
+
+Current verification:
+
+```bash
+cd backend
+.venv\Scripts\python.exe -m pytest
+
+cd frontend
+npm run test
+npm run lint
+npm run build
+```
+
+Expected result:
+
+- Backend unit/API tests pass.
+- E2E test remains skipped unless `RUN_E2E=1`.
+- Frontend event/name tests pass.
+- Frontend lint has no warnings.
+- Frontend production build succeeds.
+
+If `npm run build` runs while `npm run dev` is already serving the app, restart
+the dev server before browser testing. Next.js can otherwise keep serving stale
+development chunk paths from `.next`.
+
+On Windows, keep `$env:PYTHONIOENCODING="utf-8"` set for background backend
+runs. This prevents terminal encoding issues from interrupting startup logs.
+
+## What I Intentionally Did Not Build In 2 Days
+
+- Full marketplace.
+- RBAC and auth.
+- Real VDR ingestion.
+- Real document parsing.
+- External connectors.
+- Multi-tenant production hardening.
+- Plugin ecosystem.
+- Knowledge-to-workflow compiler.
+
+Those would make sense after the local trust-layer demo is sharp.
+
+## What I Would Build Next At VectorShift Scale
+
+1. Source-grounded document ingestion with citations.
+2. Eval suites for workflow templates.
+3. Workflow versioning and diff review.
+4. Approval policies by role and risk level.
+5. Replayable execution history for debugging.
+6. Cost and latency budgets per workflow.
+7. Template analytics: where users edit, fail, and abandon workflows.
+
+## Tech Stack
+
+- Frontend: Next.js, React, TypeScript, Tailwind, React Flow, Zustand.
+- Backend: FastAPI, SQLAlchemy, Temporal, Redis, PostgreSQL/SQLite.
+- AI path: deterministic local demo executor plus production model providers.
+
+## License
+
+Copyright 2025 Sandip Pathe. For evaluation and demonstration only.

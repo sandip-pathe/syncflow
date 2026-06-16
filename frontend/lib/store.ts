@@ -8,6 +8,11 @@ import {
   LayoutType,
   ApprovalRequest,
 } from "@/types/workflow";
+import {
+  approvalFromEvent,
+  getNodeStatusForEvent,
+  isApprovalRequestedEvent,
+} from "@/lib/workflow-events";
 
 interface WorkflowState {
   // Core workflow data
@@ -23,6 +28,7 @@ interface WorkflowState {
 
   // Execution data
   executionId: string | null; // <-- ADDED
+  executionBackend: "local" | "temporal" | null;
   events: ExecutionEvent[];
 
   // UI state
@@ -42,6 +48,7 @@ interface WorkflowState {
   setWorkflowId: (id: string) => void; // <-- ADDED
   setWorkflowName: (name: string) => void; // <-- ADDED
   setExecutionId: (id: string | null) => void; // <-- ADDED
+  setExecutionBackend: (backend: "local" | "temporal" | null) => void;
   setMode: (mode: WorkflowMode) => void;
   setLayoutType: (type: LayoutType) => void;
   setNodes: (nodes: WorkflowNode[]) => void;
@@ -55,6 +62,7 @@ interface WorkflowState {
   ) => void;
   setSelectedNode: (id: string | null) => void;
   addEvent: (event: ExecutionEvent) => void;
+  applyExecutionEvent: (event: ExecutionEvent) => void;
   clearEvents: () => void;
   toggleLeftSidebar: () => void;
   toggleRightSidebar: () => void;
@@ -74,6 +82,7 @@ export const useWorkflowStore = create<WorkflowState>()(
     layoutType: "dag",
     selectedNodeId: null,
     executionId: null,
+    executionBackend: null,
     events: [],
     leftSidebarOpen: true,
     rightSidebarOpen: true,
@@ -87,6 +96,7 @@ export const useWorkflowStore = create<WorkflowState>()(
     setWorkflowId: (id) => set({ workflowId: id }),
     setWorkflowName: (name) => set({ workflowName: name }),
     setExecutionId: (id) => set({ executionId: id }),
+    setExecutionBackend: (backend) => set({ executionBackend: backend }),
 
     setMode: (mode) => {
       set({ mode });
@@ -150,15 +160,68 @@ export const useWorkflowStore = create<WorkflowState>()(
           (e) => `${e.timestamp}-${e.nodeId}-${e.eventType}` === eventKey
         );
 
-        if (isDuplicate) {
-          console.log("🔄 Skipping duplicate event:", eventKey);
-          return state;
-        }
+        if (isDuplicate) return state;
 
         return {
           events: [event, ...state.events], // Prepend for chronological order in UI
         };
       }),
+
+    applyExecutionEvent: (event) => {
+      get().addEvent(event);
+
+      const status = getNodeStatusForEvent(event);
+      if (event.nodeId && status) {
+        get().updateNodeStatus(event.nodeId, status);
+      }
+
+      if (event.nodeId && event.eventType === "node.completed") {
+        const result = event.data;
+        const cost =
+          result && typeof result === "object" && "cost" in result
+            ? Number(result.cost)
+            : undefined;
+        const executionTime =
+          result && typeof result === "object" && "latency_ms" in result
+            ? Number(result.latency_ms) / 1000
+            : undefined;
+        set((state) => ({
+          nodes: state.nodes.map((node) =>
+            node.id === event.nodeId
+              ? {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    lastResult: result,
+                    ...(cost !== undefined ? { cost } : {}),
+                    ...(executionTime !== undefined ? { executionTime } : {}),
+                  },
+                }
+              : node
+          ),
+        }));
+      }
+
+      if (isApprovalRequestedEvent(event.eventType)) {
+        const approval = approvalFromEvent(event);
+        if (approval) {
+          set({ currentApproval: approval, mode: "paused" });
+        }
+      }
+
+      if (event.eventType === "workflow.completed") {
+        set({
+          mode: "completed",
+          output: { status: "completed", result: event.data },
+          currentApproval: null,
+        });
+      } else if (event.eventType === "workflow.failed") {
+        set({
+          mode: "failed",
+          output: { status: "failed", result: event.error || event.data },
+        });
+      }
+    },
 
     clearEvents: () => set({ events: [] }),
 
@@ -187,6 +250,7 @@ export const useWorkflowStore = create<WorkflowState>()(
         mode: "design",
         selectedNodeId: null,
         executionId: null,
+        executionBackend: null,
         events: [],
         layoutType: "dag",
         output: null,

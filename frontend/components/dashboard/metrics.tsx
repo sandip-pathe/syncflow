@@ -11,6 +11,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Activity,
+  AlertCircle,
   DollarSign,
   CheckCircle2,
   XCircle,
@@ -21,21 +22,31 @@ import { api } from "@/lib/api";
 
 // API fetching functions
 async function fetchSummaryMetrics() {
-  return api.metrics.get();
+  return api.metrics.summary();
 }
 
 async function fetchAgentMetrics() {
-  return api.metrics.get();
+  return api.metrics.agents();
 }
 
 export function MetricsDashboard() {
-  const { data: summary, isLoading: isSummaryLoading } = useQuery({
+  const {
+    data: summary,
+    isLoading: isSummaryLoading,
+    error: summaryError,
+  } = useQuery({
     queryKey: ["summaryMetrics"],
     queryFn: fetchSummaryMetrics,
+    retry: false,
   });
-  const { data: agentMetrics, isLoading: isAgentLoading } = useQuery({
+  const {
+    data: agentMetrics,
+    isLoading: isAgentLoading,
+    error: agentError,
+  } = useQuery({
     queryKey: ["agentMetrics"],
     queryFn: fetchAgentMetrics,
+    retry: false,
   });
 
   if (isSummaryLoading || isAgentLoading) {
@@ -46,9 +57,29 @@ export function MetricsDashboard() {
     );
   }
 
+  if (summaryError || agentError || !summary) {
+    return (
+      <div className="min-h-screen bg-slate-50 p-6">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-5 text-red-900">
+          <div className="flex items-center gap-2 font-semibold">
+            <AlertCircle className="h-5 w-5" />
+            Metrics unavailable
+          </div>
+          <p className="mt-2 text-sm leading-6">
+            The dashboard could not load metrics from the backend. Confirm the
+            backend is running and the metrics API is reachable at
+            /api/metrics/summary.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const agents = Array.isArray(agentMetrics) ? agentMetrics : [];
+
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
-      <h1 className="text-3xl font-bold">Analytics Dashboard</h1>
+      <h1 className="text-3xl font-bold">Run Metrics</h1>
       <Tabs defaultValue="overview" className="space-y-6">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -75,43 +106,59 @@ export function MetricsDashboard() {
           </div>
         </TabsContent>
         <TabsContent value="agents" className="space-y-4">
-          {agentMetrics?.map((agent: any) => (
-            <Card key={agent.agent_id}>
+          {agents.length > 0 ? (
+            agents.map((agent: any) => (
+              <Card key={`${agent.provider}-${agent.agent_id}`}>
+                <CardHeader>
+                  <CardTitle>
+                    {agent.provider}:{" "}
+                    <span className="font-mono">{agent.agent_id}</span>
+                  </CardTitle>
+                  <CardDescription>
+                    {agent.executions} executions
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <p className="text-gray-500">Reliability</p>
+                      <p className="font-semibold">
+                        {`${(Number(agent.reliability_score || 0) * 100).toFixed(
+                          1
+                        )}%`}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Avg. Latency</p>
+                      <p className="font-semibold">
+                        {Number(agent.avg_latency_ms || 0).toFixed(0)}ms
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Total Cost</p>
+                      <p className="font-semibold">
+                        ${Number(agent.total_cost || 0).toFixed(4)}
+                      </p>
+                    </div>
+                  </div>
+                  <Progress
+                    value={Number(agent.reliability_score || 0) * 100}
+                    className="mt-4 h-2"
+                  />
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <Card>
               <CardHeader>
-                <CardTitle>
-                  {agent.provider}:{" "}
-                  <span className="font-mono">{agent.agent_id}</span>
-                </CardTitle>
-                <CardDescription>{agent.executions} executions</CardDescription>
+                <CardTitle>No agent metrics yet</CardTitle>
+                <CardDescription>
+                  Run a workflow to populate agent reliability, latency, and cost
+                  metrics.
+                </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <p className="text-gray-500">Reliability</p>
-                    <p className="font-semibold">
-                      {(agent.reliability_score * 100).toFixed(1)}%
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Avg. Latency</p>
-                    <p className="font-semibold">
-                      {agent.avg_latency_ms.toFixed(0)}ms
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Total Cost</p>
-                    <p className="font-semibold">
-                      ${agent.total_cost.toFixed(4)}
-                    </p>
-                  </div>
-                </div>
-                <Progress
-                  value={agent.reliability_score * 100}
-                  className="mt-4 h-2"
-                />
-              </CardContent>
             </Card>
-          ))}
+          )}
         </TabsContent>
       </Tabs>
     </div>

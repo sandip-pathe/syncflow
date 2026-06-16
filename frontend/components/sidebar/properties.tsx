@@ -27,7 +27,7 @@ export function PropertiesPanel() {
 
   if (!selectedNode) {
     return (
-      <div className="h-full bg-black text-gray-500 flex items-center justify-center p-4 text-center">
+      <div className="flex h-full items-center justify-center bg-white p-4 text-center text-slate-500">
         Select a node to view its properties.
       </div>
     );
@@ -156,14 +156,14 @@ export function PropertiesPanel() {
 
   return (
     <div
-      className="h-full bg-black text-white overflow-y-auto"
+      className="h-full overflow-y-auto bg-white text-slate-950"
       style={{ scrollbarWidth: "none" }}
     >
       {/* Header */}
-      <div className="p-4 border-b border-gray-700">
+      <div className="border-b border-slate-200 p-4">
         <div className="flex items-center gap-2">
-          <Settings className="w-5 h-5 text-purple-400" />
-          <h2 className="font-semibold text-lg text-white">
+          <Settings className="w-5 h-5 text-slate-500" />
+          <h2 className="text-lg font-semibold text-slate-950">
             {getNodeTypeDisplay(selectedNode.type)} Node
           </h2>
         </div>
@@ -179,22 +179,22 @@ export function PropertiesPanel() {
             value={selectedNode.data.label || ""}
             onChange={(e) => handleLabelUpdate(e.target.value)}
             placeholder="Node label"
-            className="bg-gray-800 border-gray-700 text-white"
+            className="border-slate-200 bg-white text-slate-950"
           />
-          <p className="text-xs text-gray-400">Display name in the canvas</p>
+          <p className="text-xs text-slate-500">Display name in the canvas</p>
         </div>
 
-        <Separator className="bg-gray-700" />
+        <Separator className="bg-slate-200" />
 
         {/* Configuration Section */}
         <div className="space-y-4">
-          <h3 className="font-semibold text-base text-gray-300">
+          <h3 className="text-base font-semibold text-slate-700">
             Configuration
           </h3>
           {renderNodeProperties(selectedNode)}
         </div>
 
-        <Separator className="bg-gray-700" />
+        <Separator className="bg-slate-200" />
 
         {/* Actions */}
         <div className="space-y-2">

@@ -8,8 +8,9 @@ from temporalio.client import Client
 from typing import List
 from app.core.config import settings
 from app.core.database import get_db
-from app.models.workflow import ApprovalRequest
+from app.models.workflow import ApprovalRequest, Execution, Workflow
 from app.schemas.workflow import ApprovalResponseSchema
+from app.services.local_execution import LocalWorkflowExecutor
 from app.temporal.workflows import OrchestrationWorkflow
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
@@ -82,8 +83,37 @@ async def respond_to_approval(
     
     if should_proceed:
         approval.status = final_status
-        approval.resolved_at = datetime.now(timezone.utc).isoformat()
+        approval.resolved_at = datetime.now(timezone.utc)
         db.commit()
+
+        if settings.EXECUTION_BACKEND.lower() == "local":
+            execution = db.query(Execution).filter(Execution.id == execution_id).first()
+            if not execution:
+                raise HTTPException(404, "Execution not found")
+            workflow = db.query(Workflow).filter(Workflow.id == execution.workflow_id).first()
+            if not workflow:
+                raise HTTPException(404, "Workflow not found")
+
+            result = LocalWorkflowExecutor().resume_after_approval(
+                db=db,
+                workflow_def=workflow.definition,
+                execution=execution,
+                approval=approval,
+                approval_result={
+                    "action": final_status,
+                    "approver": response.approver,
+                    "comment": response.comment,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+            return {
+                "status": final_status,
+                "execution_id": execution_id,
+                "execution_status": result.get("status"),
+                "execution_backend": "local",
+                "events": result.get("events", []),
+                "output": result.get("output"),
+            }
         
         # Signal Temporal workflow with proper authentication
         if settings.TEMPORAL_API_KEY:

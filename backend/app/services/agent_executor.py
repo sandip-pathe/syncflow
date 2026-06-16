@@ -52,8 +52,8 @@ class AgentExecutor:
                     temperature=temperature,
                     expected_output_format=expected_output_format
                 )
-            elif provider == "lyzr":
-                result = await self._execute_lyzr(agent_id, input_data)
+            elif provider == "external":
+                result = await self._execute_external_agent(agent_id, input_data)
             elif provider in ["anthropic", "custom"]:
                 result = await self._execute_custom(provider, agent_id, input_data)
             else:
@@ -147,16 +147,16 @@ class AgentExecutor:
             "temperature_used": temperature
         }
     
-    async def _execute_lyzr(self, agent_id: str, input_data: dict) -> dict:
-        """Execute Lyzr agent"""
-        if not settings.LYZR_API_KEY:
-            raise ValueError("LYZR_API_KEY not configured")
+    async def _execute_external_agent(self, agent_id: str, input_data: dict) -> dict:
+        """Execute an externally hosted agent."""
+        if not settings.EXTERNAL_AGENT_API_KEY:
+            raise ValueError("EXTERNAL_AGENT_API_KEY not configured")
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"https://api.lyzr.ai/v1/agents/{agent_id}/execute",
+                f"{settings.EXTERNAL_AGENT_BASE_URL.rstrip('/')}/agents/{agent_id}/execute",
                 json=input_data,
-                headers={"Authorization": f"Bearer {settings.LYZR_API_KEY}"},
+                headers={"Authorization": f"Bearer {settings.EXTERNAL_AGENT_API_KEY}"},
                 timeout=300
             )
             response.raise_for_status()

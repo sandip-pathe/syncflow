@@ -21,8 +21,8 @@ interface ApprovalModalProps {
   approval: ApprovalRequest | null;
   open: boolean;
   onClose: () => void;
-  onApprove: (comment: string) => void;
-  onReject: (comment: string) => void;
+  onApprove: (comment: string) => Promise<void> | void;
+  onReject: (comment: string) => Promise<void> | void;
 }
 
 export function ApprovalModal({
@@ -39,18 +39,28 @@ export function ApprovalModal({
 
   const handleApprove = async () => {
     setIsSubmitting(true);
-    await onApprove(comment);
-    setIsSubmitting(false);
-    setComment("");
-    onClose();
+    try {
+      await onApprove(comment);
+      setComment("");
+      onClose();
+    } catch {
+      // The parent mutation owns the user-facing error toast.
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleReject = async () => {
     setIsSubmitting(true);
-    await onReject(comment);
-    setIsSubmitting(false);
-    setComment("");
-    onClose();
+    try {
+      await onReject(comment);
+      setComment("");
+      onClose();
+    } catch {
+      // The parent mutation owns the user-facing error toast.
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const formatDate = (date: string) => {
@@ -61,14 +71,19 @@ export function ApprovalModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !isSubmitting) onClose();
+      }}
+    >
       <DialogContent className="max-w-3xl max-h-[90vh]">
         <DialogHeader>
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <DialogTitle className="text-2xl font-bold flex items-center gap-2">
                 <AlertTriangle className="w-6 h-6 text-orange-600" />
-                Approval Required
+                {approval.title || "Approval Required"}
               </DialogTitle>
               <DialogDescription className="mt-2 text-base">
                 {approval.description}
@@ -108,15 +123,7 @@ export function ApprovalModal({
                         <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">
                           {key.replace(/([A-Z])/g, " $1").trim()}
                         </span>
-                        {typeof value === "object" ? (
-                          <pre className="text-sm font-mono bg-white p-3 rounded border border-gray-200 overflow-x-auto">
-                            {JSON.stringify(value, null, 2)}
-                          </pre>
-                        ) : (
-                          <p className="text-sm text-gray-900">
-                            {String(value)}
-                          </p>
-                        )}
+                        {renderContextValue(key, value)}
                       </div>
                     ))}
                   </div>
@@ -140,7 +147,7 @@ export function ApprovalModal({
                     {approval.context.highRiskItems.map(
                       (item: string, idx: number) => (
                         <li key={idx} className="text-sm text-red-800">
-                          • {item}
+                          - {item}
                         </li>
                       )
                     )}
@@ -186,6 +193,7 @@ export function ApprovalModal({
             Reject
           </Button>
           <Button
+            data-testid="approval-approve-button"
             onClick={handleApprove}
             disabled={isSubmitting}
             className="bg-green-600 hover:bg-green-700 gap-2"
@@ -197,4 +205,83 @@ export function ApprovalModal({
       </DialogContent>
     </Dialog>
   );
+}
+
+function renderContextValue(key: string, value: any) {
+  if (value === null || value === undefined || value === "") {
+    return <p className="text-sm text-gray-500">None</p>;
+  }
+
+  if (Array.isArray(value)) {
+    if (key === "claims") {
+      return (
+        <div className="space-y-2">
+          {value.map((item, index) => (
+            <div
+              key={`${key}-${index}`}
+              className="rounded-md border border-blue-100 bg-blue-50 p-3"
+            >
+              <p className="text-sm font-medium text-blue-950">
+                {item?.claim || String(item)}
+              </p>
+              {item?.source && (
+                <p className="mt-1 text-xs text-blue-700">
+                  Source: {item.source}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (key === "risks") {
+      return (
+        <div className="space-y-2">
+          {value.map((item, index) => (
+            <div
+              key={`${key}-${index}`}
+              className="rounded-md border border-amber-200 bg-amber-50 p-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-amber-950">
+                  {item?.risk || String(item)}
+                </p>
+                {item?.severity && (
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium uppercase text-amber-800">
+                    {item.severity}
+                  </span>
+                )}
+              </div>
+              {item?.rationale && (
+                <p className="mt-1 text-xs leading-5 text-amber-800">
+                  {item.rationale}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <ul className="list-disc space-y-1 pl-5 text-sm text-gray-900">
+        {value.map((item, index) => (
+          <li key={`${key}-${index}`}>
+            {typeof item === "object" ? JSON.stringify(item) : String(item)}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (typeof value === "object") {
+    return (
+      <pre className="text-sm font-mono bg-white p-3 rounded border border-gray-200 overflow-x-auto">
+        {JSON.stringify(value, null, 2)}
+      </pre>
+    );
+  }
+
+  return <p className="text-sm text-gray-900">{String(value)}</p>;
 }

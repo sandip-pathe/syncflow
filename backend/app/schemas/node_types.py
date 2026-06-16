@@ -31,7 +31,7 @@ class AgentConfig(BaseModel):
     system_instructions: str = Field(..., description="Defines model behavior")
     expected_output_format: Optional[str] = Field(None, description="Ensures predictable downstream parsing")
     # Legacy fields for backward compatibility
-    provider: Optional[str] = Field("openai", description="AI provider (e.g., openai, lyzr)")
+    provider: Optional[str] = Field("openai", description="AI provider (e.g., openai, anthropic, external)")
     agent_id: Optional[str] = Field("gpt-4o-mini", description="Specific agent/model ID")
 
 class ApiCallConfig(BaseModel):

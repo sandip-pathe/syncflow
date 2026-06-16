@@ -2,14 +2,14 @@ import { MetricsDashboard } from "@/components/dashboard/metrics";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Metrics - Lyzr Orchestrator",
+  title: "Metrics - SyncFlow",
   description:
-    "Monitor workflow performance, execution metrics, AI agent reliability, and system analytics. Track latency, success rates, and operational insights.",
+    "Monitor workflow runs, approval-critical execution health, latency, cost, and agent reliability.",
   keywords:
     "metrics, analytics, workflow metrics, performance monitoring, AI agent metrics, dashboard",
   openGraph: {
-    title: "Metrics Dashboard - Lyzr Orchestrator",
-    description: "Real-time workflow and AI agent performance metrics",
+    title: "Metrics Dashboard - SyncFlow",
+    description: "Workflow run and AI agent performance metrics",
     type: "website",
   },
 };

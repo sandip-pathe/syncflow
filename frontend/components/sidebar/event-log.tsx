@@ -16,17 +16,31 @@ import { cn } from "@/lib/utils";
 import { ExecutionEvent } from "@/types/workflow";
 
 const eventIcons: Record<string, typeof Activity> = {
-  started: Zap,
-  completed: CheckCircle2,
-  failed: XCircle,
-  approval_requested: AlertCircle,
+  "workflow.started": Zap,
+  "workflow.completed": CheckCircle2,
+  "workflow.failed": XCircle,
+  "node.started": Zap,
+  "node.completed": CheckCircle2,
+  "node.failed": XCircle,
+  "approval.requested": AlertCircle,
+  "hitl.approval.requested": AlertCircle,
+  "ui.approval.requested": AlertCircle,
+  "approval.granted": CheckCircle2,
+  "approval.denied": XCircle,
 };
 
 const eventColors: Record<string, string> = {
-  started: "text-blue-400 bg-blue-900/50",
-  completed: "text-green-400 bg-green-900/50",
-  failed: "text-red-400 bg-red-900/50",
-  approval_requested: "text-orange-400 bg-orange-900/50",
+  "workflow.started": "text-blue-700 bg-blue-50",
+  "workflow.completed": "text-emerald-700 bg-emerald-50",
+  "workflow.failed": "text-red-700 bg-red-50",
+  "node.started": "text-blue-700 bg-blue-50",
+  "node.completed": "text-emerald-700 bg-emerald-50",
+  "node.failed": "text-red-700 bg-red-50",
+  "approval.requested": "text-amber-700 bg-amber-50",
+  "hitl.approval.requested": "text-amber-700 bg-amber-50",
+  "ui.approval.requested": "text-amber-700 bg-amber-50",
+  "approval.granted": "text-emerald-700 bg-emerald-50",
+  "approval.denied": "text-red-700 bg-red-50",
 };
 
 export function EventLogStream({
@@ -34,8 +48,9 @@ export function EventLogStream({
 }: {
   onViewReport: (event: ExecutionEvent) => void;
 }) {
-  const { events, wsConnected } = useWorkflowStore();
+  const { events, wsConnected, executionBackend } = useWorkflowStore();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const timelineEvents = [...events].reverse();
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -52,72 +67,181 @@ export function EventLogStream({
     });
   };
 
+  const eventTitle = (event: ExecutionEvent) => {
+    if (event.eventType === "workflow.started") return "Run started";
+    if (event.eventType === "workflow.completed") return "Run completed";
+    if (event.eventType === "workflow.failed") return "Run failed";
+    if (event.eventType === "node.started") return "Node started";
+    if (event.eventType === "node.completed") return "Node completed";
+    if (event.eventType === "node.failed") return "Node failed";
+    if (
+      event.eventType === "approval.requested" ||
+      event.eventType === "hitl.approval.requested" ||
+      event.eventType === "ui.approval.requested"
+    ) {
+      return "Approval requested";
+    }
+    if (event.eventType === "approval.granted") return "Approval granted";
+    if (event.eventType === "approval.denied") return "Approval denied";
+    return String(event.eventType).replace(".", " ");
+  };
+
+  const eventSummary = (event: ExecutionEvent) => {
+    const data = event.data || {};
+
+    if (event.eventType === "workflow.started") {
+      return "Workflow run accepted by the execution backend.";
+    }
+
+    if (event.eventType === "workflow.completed") {
+      return "Workflow finished and produced a final output.";
+    }
+
+    if (event.eventType === "workflow.failed") {
+      return event.error || data.error || "Workflow failed during execution.";
+    }
+
+    if (event.eventType === "node.started") {
+      return `${formatNodeName(event.nodeId)} is now running.`;
+    }
+
+    if (
+      event.eventType === "approval.requested" ||
+      event.eventType === "hitl.approval.requested" ||
+      event.eventType === "ui.approval.requested"
+    ) {
+      return (
+        data.description ||
+        `${data.title || "Approval"} is required before the workflow continues.`
+      );
+    }
+
+    if (event.eventType === "node.completed") {
+      if (typeof data.output === "string") return data.output;
+      if (typeof data.reason === "string") return data.reason;
+      if (data.action) {
+        return `Approval ${data.action} by ${data.approver || "reviewer"}.`;
+      }
+      if (data.status === "workflow end") {
+        return "Final workflow output was captured.";
+      }
+      return `${formatNodeName(event.nodeId)} completed successfully.`;
+    }
+
+    if (
+      event.eventType === "approval.granted" ||
+      event.eventType === "approval.denied"
+    ) {
+      return `Reviewer ${data.action || "responded"}${
+        data.comment ? `: ${data.comment}` : "."
+      }`;
+    }
+
+    if (event.eventType === "node.failed") {
+      return event.error || data.error || `${formatNodeName(event.nodeId)} failed.`;
+    }
+
+    return "Workflow event recorded.";
+  };
+
+  const eventMetadata = (event: ExecutionEvent) => {
+    const data = event.data || {};
+    const metadata: Array<{ label: string; value: string }> = [];
+
+    if (event.nodeId) {
+      metadata.push({ label: "Node", value: formatNodeName(event.nodeId) });
+    }
+    if (typeof data.score === "number") {
+      metadata.push({ label: "Score", value: data.score.toFixed(2) });
+    }
+    if (typeof data.cost === "number") {
+      metadata.push({ label: "Cost", value: `$${data.cost.toFixed(4)}` });
+    }
+    if (typeof data.latency_ms === "number") {
+      metadata.push({ label: "Latency", value: `${data.latency_ms}ms` });
+    }
+    if (typeof data.model === "string") {
+      metadata.push({ label: "Model", value: data.model });
+    }
+    if (typeof data.usage?.total_tokens === "number") {
+      metadata.push({ label: "Tokens", value: String(data.usage.total_tokens) });
+    }
+    if (typeof data.approver === "string") {
+      metadata.push({ label: "Approver", value: data.approver });
+    }
+
+    return metadata;
+  };
+
   return (
-    <div className="h-full bg-black border-r border-gray-700 flex flex-col rounded-2xl">
-      {/* Header */}
-      <div className="p-4 border-b border-gray-700">
-        <div className="flex items-center justify-between">
+    <div className="flex h-full flex-col bg-white">
+      <div className="border-b border-slate-200 p-4">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="font-semibold text-lg text-white">Event Stream</h2>
-            <p className="text-xs text-gray-400 mt-1">
-              Real-time execution log
+            <h2 className="text-lg font-semibold text-slate-950">
+              Execution Timeline
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Audit trail for this run
             </p>
           </div>
           <div className="flex items-center gap-2">
             <div
               className={cn(
-                "w-2 h-2 rounded-full",
-                wsConnected ? "bg-green-500 animate-pulse" : "bg-gray-400"
+                "h-2 w-2 rounded-full",
+                wsConnected || executionBackend === "local"
+                  ? "bg-emerald-500"
+                  : "bg-slate-300"
               )}
             />
-            <span className="text-xs text-gray-400">
-              {wsConnected ? "Connected" : "Disconnected"}
+            <span className="text-xs text-slate-500">
+              {executionBackend === "local"
+                ? "Local"
+                : wsConnected
+                ? "Live"
+                : "Offline"}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Event List */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-2">
+      <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto p-4">
         <AnimatePresence initial={false}>
-          {events.length === 0 && !wsConnected ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500">
-              <Activity className="w-12 h-12 mb-2" />
-              <p className="text-sm">No events yet</p>
-              <p className="text-xs mt-1">
-                Events will appear here during execution
+          {timelineEvents.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center text-slate-500">
+              {wsConnected ? (
+                <Loader2 className="mb-2 h-8 w-8 animate-spin text-blue-700" />
+              ) : (
+                <Activity className="mb-2 h-10 w-10" />
+              )}
+              <p className="text-sm">
+                {wsConnected ? "Workflow initializing..." : "No events yet"}
               </p>
-            </div>
-          ) : events.length === 0 && wsConnected ? (
-            <div className="flex flex-col items-center justify-center h-full text-blue-400">
-              <Loader2 className="w-8 h-8 mb-2 animate-spin" />
-              <p className="text-sm">Workflow initializing...</p>
-              <p className="text-xs mt-1 text-gray-400">
-                Waiting for first event
+              <p className="mt-1 text-xs">
+                Events will appear here during execution.
               </p>
             </div>
           ) : (
-            events.map((event, index) => {
-              // Special handling for validation failures
+            timelineEvents.map((event, index) => {
               if (event.eventType === "workflow.failed" && event.data?.errors) {
                 return (
                   <motion.div
                     key={event.id}
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="p-4 bg-red-950/50 border border-red-800 rounded-lg"
+                    className="rounded-lg border border-red-200 bg-red-50 p-4"
                   >
                     <div className="flex items-start gap-3">
-                      <div className="p-2 bg-red-900/50 rounded-lg">
-                        <XCircle className="w-5 h-5 text-red-400" />
+                      <div className="rounded-lg bg-red-100 p-2">
+                        <XCircle className="h-5 w-5 text-red-700" />
                       </div>
                       <div className="flex-1">
-                        <h3 className="font-semibold text-red-300 mb-1">
-                          ⚠️ Workflow Validation Failed
+                        <h3 className="mb-1 font-semibold text-red-800">
+                          Workflow validation failed
                         </h3>
-                        <p className="text-sm text-red-400 mb-3">
+                        <p className="mb-3 text-sm text-red-700">
                           {event.data.message ||
-                            "Please fix the following issues and try again:"}
+                            "Please fix the following issues and try again."}
                         </p>
                         <div className="space-y-2">
                           {event.data.errors.map(
@@ -126,18 +250,17 @@ export function EventLogStream({
                                 key={idx}
                                 className="flex items-start gap-2 text-sm"
                               >
-                                <span className="text-red-500 font-bold">
-                                  •
+                                <span className="font-bold text-red-600">
+                                  -
                                 </span>
-                                <span className="text-red-200">{error}</span>
+                                <span className="text-red-800">{error}</span>
                               </div>
                             )
                           )}
                         </div>
-                        <div className="mt-3 pt-3 border-t border-red-800">
-                          <p className="text-xs text-red-400">
-                            💡 Tip: Check node configurations and connections in
-                            the canvas
+                        <div className="mt-3 border-t border-red-200 pt-3">
+                          <p className="text-xs text-red-700">
+                            Check node configurations and canvas connections.
                           </p>
                         </div>
                       </div>
@@ -148,52 +271,54 @@ export function EventLogStream({
 
               const Icon = eventIcons[event.eventType] || Activity;
               const colorClass =
-                eventColors[event.eventType] || "text-gray-400 bg-gray-800";
+                eventColors[event.eventType] || "bg-slate-100 text-slate-700";
+              const metadata = eventMetadata(event);
 
               return (
                 <motion.div
                   key={event.id}
-                  initial={{ opacity: 0, x: -20 }}
+                  initial={{ opacity: 0, x: -12 }}
                   animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
+                  exit={{ opacity: 0, x: 12 }}
                   transition={{ delay: index * 0.02 }}
-                  className={cn(
-                    "p-3 rounded-lg border border-gray-700 bg-gray-900/50",
-                    "hover:bg-gray-800/50 transition-colors"
-                  )}
+                  className="rounded-lg border border-slate-200 bg-white p-3 transition hover:bg-slate-50"
                 >
                   <div className="flex items-start gap-3">
-                    <div className={cn("p-1.5 rounded-md", colorClass)}>
-                      <Icon className="w-4 h-4" />
+                    <div className={cn("rounded-md p-1.5", colorClass)}>
+                      <Icon className="h-4 w-4" />
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-gray-200">
-                          {event.eventType?.replace("_", " ").toUpperCase() ||
-                            "EVENT"}
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-medium text-slate-900">
+                          {eventTitle(event)}
                         </span>
-                        <span className="text-xs text-gray-500 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
+                        <span className="flex items-center gap-1 text-xs text-slate-500">
+                          <Clock className="h-3 w-3" />
                           {formatTime(event.timestamp)}
                         </span>
                       </div>
 
-                      <div className="text-xs text-gray-400">
-                        Node:{" "}
-                        <span className="font-mono text-gray-300">
-                          {event.nodeId}
-                        </span>
-                      </div>
+                      <p className="text-xs leading-5 text-slate-600">
+                        {eventSummary(event)}
+                      </p>
 
-                      {event.data && (
-                        <div className="mt-2 p-2 bg-black rounded text-xs font-mono text-gray-300 overflow-x-auto">
-                          {JSON.stringify(event.data, null, 2)}
+                      {metadata.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {metadata.map((item) => (
+                            <span
+                              key={`${item.label}-${item.value}`}
+                              className="max-w-full truncate rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] text-slate-600"
+                              title={`${item.label}: ${item.value}`}
+                            >
+                              {item.label}: {item.value}
+                            </span>
+                          ))}
                         </div>
                       )}
 
                       {event.error && (
-                        <div className="mt-2 p-2 bg-red-900/50 rounded text-xs text-red-300">
+                        <div className="mt-2 rounded bg-red-50 p-2 text-xs text-red-700">
                           {event.error}
                         </div>
                       )}
@@ -206,22 +331,30 @@ export function EventLogStream({
         </AnimatePresence>
       </div>
 
-      {/* Footer Stats */}
-      <div className="p-3 border-t border-gray-700 bg-black">
-        <div className="flex items-center justify-between text-xs text-gray-400">
+      <div className="border-t border-slate-200 bg-slate-50 p-3">
+        <div className="flex items-center justify-between text-xs text-slate-500">
           <span>Total Events: {events.length}</span>
           <button
-            onClick={() => onViewReport(events[0])}
-            className="text-blue-400 hover:underline"
+            onClick={() => events[0] && onViewReport(events[0])}
+            className="text-blue-700 hover:underline disabled:text-slate-400"
+            disabled={events.length === 0}
           >
             View Narration
           </button>
           <span className="flex items-center gap-1">
-            <Activity className="w-3 h-3" />
-            Live
+            <Activity className="h-3 w-3" />
+            Audit
           </span>
         </div>
       </div>
     </div>
   );
+}
+
+function formatNodeName(nodeId?: string) {
+  if (!nodeId) return "Workflow";
+  return nodeId
+    .replace(/^diligence-/, "")
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
