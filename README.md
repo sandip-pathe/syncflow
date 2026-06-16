@@ -149,6 +149,8 @@ Current reviewer-facing docs live in [`docs/`](docs/README.md):
 - [Local Demo Runbook](docs/local-demo-runbook.md): exact setup, run steps, QA commands, and troubleshooting.
 - [API And Events Reference](docs/api-and-events.md): endpoints, response shapes, event names, and node semantics.
 - [Demo Script](docs/demo-script.md): 60-90 second walkthrough and application positioning.
+- [Project Report](docs/project-report.md): shipped details, product learnings, engineering lessons, QA summary, and next steps.
+- [Project Report PDF](docs/assets/syncflow-project-report.pdf): printable version of the project report.
 
 ## API Surface
 
