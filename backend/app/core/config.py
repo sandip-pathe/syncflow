@@ -5,7 +5,7 @@ import os
 
 class Settings(BaseSettings):
     # App
-    APP_NAME: str = "Lyzr Orchestrator"
+    APP_NAME: str = "SyncFlow Durable AI Workflow Builder"
     DEBUG: bool = False  # Production default
     API_PORT: int = 8000
 
@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     
     # Frontend URL (for notifications and approval links)
     FRONTEND_URL: str = "http://localhost:3000"
+
+    # Execution
+    # local: deterministic demo runner with no Temporal/Redis/OpenAI dependency
+    # temporal: production durable execution path
+    EXECUTION_BACKEND: str = "local"
     
     @property
     def cors_origins_list(self) -> List[str]:
@@ -38,14 +43,14 @@ class Settings(BaseSettings):
         return origins
 
     # Database
-    DATABASE_URL: str
+    DATABASE_URL: str = "sqlite:///./local-dev.sqlite3"
 
     # Redis
-    REDIS_URL: str
+    REDIS_URL: str = "redis://localhost:6379/0"
 
     # Temporal Cloud
-    TEMPORAL_HOST: str  # Format: <region>.<cloud_provider>.api.temporal.io:7233
-    TEMPORAL_NAMESPACE: str  # Format: <namespace>.<account_id>
+    TEMPORAL_HOST: str = "localhost:7233"  # Format: <region>.<cloud_provider>.api.temporal.io:7233
+    TEMPORAL_NAMESPACE: str = "default"  # Format: <namespace>.<account_id>
     TEMPORAL_API_KEY: str | None = None  # Temporal Cloud API Key (recommended)
     
     # Legacy mTLS (optional, only if not using API key)
@@ -53,8 +58,9 @@ class Settings(BaseSettings):
     TEMPORAL_TLS_KEY: str | None = None   # Path to client key
 
     # APIs
-    OPENAI_API_KEY: str
-    LYZR_API_KEY: str | None = None
+    OPENAI_API_KEY: str = "local-demo-key"
+    EXTERNAL_AGENT_API_KEY: str | None = None
+    EXTERNAL_AGENT_BASE_URL: str = "https://example.com/api"
 
     # Notifications
     SLACK_WEBHOOK_URL: str | None = None

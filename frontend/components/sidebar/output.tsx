@@ -4,114 +4,198 @@ import { useWorkflowStore } from "@/lib/store";
 import { motion } from "framer-motion";
 import {
   CheckCircle2,
-  XCircle,
-  Terminal,
   DollarSign,
+  FileText,
+  Terminal,
+  UserCheck,
+  XCircle,
   Zap,
-  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  WorkflowOutput,
-  AgentOutput,
-  APICallOutput,
-  NodeOutput,
-} from "@/types/node-outputs";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-export function OutputPanel() {
-  const { output, mode } = useWorkflowStore();
+export function OutputPanel({ onOpenReport }: { onOpenReport?: () => void }) {
+  const { output } = useWorkflowStore();
+  const result = output?.result;
+  const finalResult = result?.final_result ?? result;
+  const audit = result?.audit;
+  const approval = audit?.approval;
+  const nodeOutputs =
+    result && typeof result === "object" && result.node_outputs
+      ? result.node_outputs
+      : {};
 
   return (
-    <div className="h-full bg-white border-r border-gray-200 flex flex-col">
-      {/* Header */}
-      <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-green-50 to-blue-50">
-        <div className="flex items-center justify-between">
+    <div className="flex h-full flex-col bg-white">
+      <div className="border-b border-slate-200 p-4">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="font-semibold text-lg text-gray-900">
-              Workflow Output
+            <h2 className="text-lg font-semibold text-slate-950">
+              Run Summary
             </h2>
-            <p className="text-xs text-gray-600 mt-1">
-              Final result of the execution
+            <p className="mt-1 text-xs text-slate-500">
+              Final output, audit metrics, and operator decisions
             </p>
           </div>
-          {output && (
-            <Badge
-              variant={
-                output.status === "completed" ? "default" : "destructive"
-              }
-            >
-              {output.status === "completed" ? (
-                <CheckCircle2 className="w-3 h-3 mr-1" />
-              ) : (
-                <XCircle className="w-3 h-3 mr-1" />
-              )}
-              {output.status?.toUpperCase()}
-            </Badge>
-          )}
+          <div className="flex shrink-0 items-center gap-2">
+            {output && (
+              <Badge
+                variant={
+                  output.status === "completed" ? "default" : "destructive"
+                }
+              >
+                {output.status === "completed" ? (
+                  <CheckCircle2 className="mr-1 h-3 w-3" />
+                ) : (
+                  <XCircle className="mr-1 h-3 w-3" />
+                )}
+                {output.status?.toUpperCase()}
+              </Badge>
+            )}
+            {onOpenReport && output && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 border-slate-200"
+                onClick={onOpenReport}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Report
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Output Content */}
       <ScrollArea className="flex-1">
-        <div className="p-4 space-y-4">
+        <div className="space-y-4 p-4">
           {output ? (
             <>
-              {/* Final Output */}
-              {output.result && (
+              {finalResult && (
                 <motion.div
-                  initial={{ opacity: 0, y: -20 }}
+                  initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   className={cn(
-                    "p-4 rounded-lg border",
+                    "rounded-lg border p-4",
                     output.status === "completed"
-                      ? "bg-green-50 border-green-200"
-                      : "bg-red-50 border-red-200"
+                      ? "border-emerald-200 bg-emerald-50"
+                      : "border-red-200 bg-red-50"
                   )}
                 >
                   <div className="flex items-start gap-3">
                     <div
                       className={cn(
-                        "p-1.5 rounded-md",
+                        "rounded-md p-1.5",
                         output.status === "completed"
-                          ? "text-green-600 bg-green-100"
-                          : "text-red-600 bg-red-100"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-red-100 text-red-700"
                       )}
                     >
-                      <Zap className="w-4 h-4" />
+                      <Zap className="h-4 w-4" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-gray-900 mb-2 block">
+                    <div className="min-w-0 flex-1">
+                      <span className="mb-2 block text-sm font-medium text-slate-950">
                         Final Result
                       </span>
-                      <OutputRenderer output={output.result} />
+                      <OutputRenderer output={finalResult} />
                     </div>
                   </div>
                 </motion.div>
               )}
 
-              {/* Node Outputs */}
-              {output.result && Object.keys(output.result).length > 0 && (
+              {audit && (
+                <div className="grid grid-cols-2 gap-2">
+                  <AuditMetric label="Eval score" value={audit.eval_score ?? "-"} />
+                  <AuditMetric
+                    label="Cost"
+                    value={
+                      audit.total_cost !== undefined
+                        ? `$${Number(audit.total_cost).toFixed(4)}`
+                        : "-"
+                    }
+                  />
+                  <AuditMetric
+                    label="Latency"
+                    value={
+                      audit.total_latency_ms !== undefined
+                        ? `${Math.round(audit.total_latency_ms)}ms`
+                        : "-"
+                    }
+                  />
+                  <AuditMetric label="Nodes" value={audit.nodes_executed ?? "-"} />
+                </div>
+              )}
+
+              {approval && (
+                <div className="rounded-lg border border-slate-200 bg-white p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="rounded-md bg-slate-100 p-1.5 text-slate-700">
+                        <UserCheck className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-950">
+                          Approval Decision
+                        </h4>
+                        <p className="text-xs text-slate-500">
+                          Human review captured before completion
+                        </p>
+                      </div>
+                    </div>
+                    <Badge
+                      className={cn(
+                        "border",
+                        approval.action === "approved"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-red-200 bg-red-50 text-red-700"
+                      )}
+                    >
+                      {approval.action || "not recorded"}
+                    </Badge>
+                  </div>
+                  <dl className="space-y-2 text-sm">
+                    <SummaryRow
+                      label="Approver"
+                      value={approval.approver || "Reviewer"}
+                    />
+                    <SummaryRow
+                      label="Comment"
+                      value={approval.comment || "No comment"}
+                    />
+                  </dl>
+                </div>
+              )}
+
+              {Object.keys(nodeOutputs).length > 0 && (
                 <div className="space-y-3">
-                  <h4 className="font-semibold text-sm text-gray-600">
+                  <h4 className="text-sm font-semibold text-slate-600">
                     Node Execution Details
                   </h4>
-                  {Object.entries(output.result).map(([nodeId, nodeOutput]) => (
-                    <NodeOutputCard
-                      key={nodeId}
-                      output={nodeOutput as NodeOutput}
-                    />
+                  {Object.entries(nodeOutputs).map(([nodeId, nodeOutput]) => (
+                    <Card key={nodeId} className="bg-slate-50 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <p className="truncate text-sm font-medium text-slate-900">
+                          {nodeId}
+                        </p>
+                        <Badge variant="default" className="text-xs">
+                          success
+                        </Badge>
+                      </div>
+                      <OutputRenderer output={nodeOutput} />
+                    </Card>
                   ))}
                 </div>
               )}
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400 py-20">
-              <Terminal className="w-12 h-12 mb-2" />
+            <div className="flex h-full flex-col items-center justify-center py-20 text-slate-400">
+              <Terminal className="mb-2 h-12 w-12" />
               <p className="text-sm">No output yet</p>
-              <p className="text-xs mt-1">
+              <p className="mt-1 text-xs">
                 Run a workflow to see the final result.
               </p>
             </div>
@@ -122,183 +206,85 @@ export function OutputPanel() {
   );
 }
 
-function NodeOutputCard({ output }: { output: NodeOutput }) {
-  const getIcon = () => {
-    switch (output.node_type) {
-      case "agent":
-        return "🤖";
-      case "timer":
-        return "⏰";
-      case "conditional":
-        return "🔀";
-      case "api_call":
-        return "🌐";
-      case "eval":
-        return "📊";
-      case "approval":
-        return "✅";
-      case "event":
-        return "📡";
-      case "merge":
-        return "🔗";
-      case "loop":
-        return "🔄";
-      default:
-        return "📦";
-    }
-  };
-
+function AuditMetric({ label, value }: { label: string; value: any }) {
   return (
-    <Card className="p-3 bg-gray-50">
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center space-x-2">
-          <span className="text-xl">{getIcon()}</span>
-          <div>
-            <p className="font-medium capitalize text-sm">
-              {output.node_type?.replace("_", " ") || "Unknown"}
-            </p>
-            <p className="text-xs text-gray-500 font-mono">{output.node_id}</p>
-          </div>
-        </div>
-        <Badge
-          variant={output.status === "success" ? "default" : "destructive"}
-          className="text-xs"
-        >
-          {output.status}
-        </Badge>
-      </div>
-
-      {/* Type-specific rendering */}
-      {output.node_type === "agent" && (
-        <AgentOutputDetails output={output as AgentOutput} />
-      )}
-      {output.node_type === "api_call" && (
-        <APIOutputDetails output={output as APICallOutput} />
-      )}
-
-      {/* Generic output for other types */}
-      {!["agent", "api_call"].includes(output.node_type) && (
-        <div className="mt-2">
-          <OutputRenderer output={output.raw_output} />
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function AgentOutputDetails({ output }: { output: AgentOutput }) {
-  return (
-    <div className="space-y-2">
-      <div className="bg-white p-3 rounded-md border border-gray-200">
-        <p className="text-sm whitespace-pre-wrap text-gray-700">
-          {output.output}
-        </p>
-      </div>
-      <div className="flex items-center justify-between text-xs text-gray-500">
-        <span className="flex items-center">
-          <DollarSign className="w-3 h-3 mr-1" />${output.cost.toFixed(6)}
-        </span>
-        <span className="font-mono">{output.model}</span>
-        <span>{output.usage.total_tokens} tokens</span>
-      </div>
+    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="mt-1 text-sm font-semibold text-slate-950">{value}</div>
     </div>
   );
 }
 
-function APIOutputDetails({ output }: { output: APICallOutput }) {
-  const isSuccess = output.status_code >= 200 && output.status_code < 300;
-
+function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between text-xs">
-        <Badge variant={isSuccess ? "default" : "destructive"}>
-          {output.status_code}
-        </Badge>
-        <span className="text-gray-500 flex items-center">
-          <Clock className="w-3 h-3 mr-1" />
-          {output.response_time_ms.toFixed(0)}ms
-        </span>
-      </div>
-      <div className="bg-white p-2 rounded-md border border-gray-200 max-h-40 overflow-auto">
-        <pre className="text-xs font-mono text-gray-700">
-          {JSON.stringify(output.body, null, 2)}
-        </pre>
-      </div>
+    <div className="grid grid-cols-[88px_minmax(0,1fr)] gap-2">
+      <dt className="text-xs font-medium uppercase text-slate-500">{label}</dt>
+      <dd className="break-words text-sm text-slate-800">{value}</dd>
     </div>
   );
 }
 
 function OutputRenderer({ output }: { output: any }) {
   if (output === null || output === undefined) {
-    return <p className="text-sm text-gray-500 italic">No output</p>;
+    return <p className="text-sm italic text-slate-500">No output</p>;
   }
 
   if (typeof output === "string") {
     return (
-      <div className="bg-white p-3 rounded-md border border-gray-200">
-        <p className="text-sm whitespace-pre-wrap text-gray-700">{output}</p>
+      <div className="rounded-md border border-slate-200 bg-white p-3">
+        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
+          {output}
+        </p>
       </div>
     );
   }
 
   if (typeof output === "boolean" || typeof output === "number") {
     return (
-      <div className="bg-white p-3 rounded-md border border-gray-200">
-        <p className="text-sm font-mono text-gray-700">{String(output)}</p>
+      <div className="rounded-md border border-slate-200 bg-white p-3">
+        <p className="font-mono text-sm text-slate-700">{String(output)}</p>
       </div>
     );
   }
 
   if (typeof output === "object") {
-    // Try to extract meaningful content from the object
     const content = extractContent(output);
 
     if (content) {
       return (
         <div className="space-y-2">
-          <div className="bg-white p-3 rounded-md border border-gray-200">
-            <p className="text-sm whitespace-pre-wrap text-gray-700">
+          <div className="rounded-md border border-slate-200 bg-white p-3">
+            <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
               {content}
             </p>
           </div>
-          {/* Show metadata in a compact format */}
           {(output.usage || output.cost !== undefined) && (
-            <div className="flex items-center gap-3 text-xs text-gray-500">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
               {output.usage && (
                 <span>
-                  {output.usage.total_tokens || output.usage.prompt_tokens}{" "}
-                  tokens
+                  {output.usage.total_tokens || output.usage.prompt_tokens} tokens
                 </span>
               )}
               {output.cost !== undefined && (
                 <span className="flex items-center">
-                  <DollarSign className="w-3 h-3 mr-1" />$
-                  {output.cost.toFixed(6)}
+                  <DollarSign className="mr-1 h-3 w-3" />
+                  {Number(output.cost).toFixed(6)}
                 </span>
               )}
-              {output.model && (
-                <span className="font-mono">{output.model}</span>
-              )}
+              {output.model && <span className="font-mono">{output.model}</span>}
             </div>
           )}
         </div>
       );
     }
 
-    // Fallback to formatted JSON
-    return (
-      <pre className="text-xs bg-white p-2 rounded-md border border-gray-200 overflow-auto max-h-60 font-mono text-gray-700">
-        {JSON.stringify(output, null, 2)}
-      </pre>
-    );
+    return <StructuredSummary output={output} />;
   }
 
-  return <p className="text-sm text-gray-500 italic">Unknown output format</p>;
+  return <p className="text-sm italic text-slate-500">Unknown output format</p>;
 }
 
-// Helper function to extract the main content from an output object
 function extractContent(output: any): string | null {
-  // Priority order for content extraction
   if (typeof output.output === "string") return output.output;
   if (typeof output.result === "string") return output.result;
   if (typeof output.text === "string") return output.text;
@@ -306,8 +292,8 @@ function extractContent(output: any): string | null {
   if (typeof output.message === "string") return output.message;
   if (typeof output.value === "string") return output.value;
   if (typeof output.data === "string") return output.data;
+  if (typeof output.input_text === "string") return output.input_text;
 
-  // Handle nested objects
   if (output.output && typeof output.output === "object") {
     return extractContent(output.output);
   }
@@ -316,4 +302,58 @@ function extractContent(output: any): string | null {
   }
 
   return null;
+}
+
+function StructuredSummary({ output }: { output: Record<string, any> }) {
+  const rows = Object.entries(output)
+    .map(([key, value]) => ({
+      key,
+      value: summarizeValue(value),
+    }))
+    .filter((row) => row.value);
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-md border border-slate-200 bg-white p-3">
+        <p className="text-sm text-slate-500">Structured metadata captured.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-3">
+      <dl className="space-y-2">
+        {rows.slice(0, 5).map((row) => (
+          <div key={row.key} className="grid grid-cols-[96px_minmax(0,1fr)] gap-2">
+            <dt className="truncate text-xs font-medium uppercase text-slate-500">
+              {formatLabel(row.key)}
+            </dt>
+            <dd className="break-words text-sm text-slate-800">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function summarizeValue(value: any): string {
+  if (value === null || value === undefined || value === "") return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return `${value.length} item${value.length === 1 ? "" : "s"}`;
+  }
+  if (typeof value === "object") {
+    const keys = Object.keys(value);
+    return keys.length
+      ? `${keys.length} field${keys.length === 1 ? "" : "s"} captured`
+      : "";
+  }
+  return "";
+}
+
+function formatLabel(value: string): string {
+  return value.replace(/_/g, " ");
 }

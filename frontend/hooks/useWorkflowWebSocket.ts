@@ -1,15 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import {
-  ApprovalRequest,
-  ExecutionEvent,
-  EventTypeName,
-  NodeStatus,
-} from "@/types/workflow";
 import { useWorkflowStore } from "@/lib/store";
 import { toast } from "sonner";
 import { wsUrl } from "@/lib/api";
+import {
+  isApprovalRequestedEvent,
+  normalizeBackendEvent,
+} from "@/lib/workflow-events";
 
 interface WebSocketMessageStructure {
   event_type: string;
@@ -22,14 +20,7 @@ export function useWorkflowWebSocket(
   enabled: boolean = true
 ) {
   const wsRef = useRef<WebSocket | null>(null);
-  const {
-    addEvent,
-    updateNodeStatus,
-    setWsConnected,
-    setMode,
-    setCurrentApproval,
-    setOutput,
-  } = useWorkflowStore();
+  const { applyExecutionEvent, setWsConnected } = useWorkflowStore();
 
   useEffect(() => {
     if (!executionId || !enabled) {
@@ -42,156 +33,55 @@ export function useWorkflowWebSocket(
     }
 
     const url = wsUrl(`api/events/ws/executions/${executionId}`);
-    console.log("[WebSocket] Attempting to connect to:", url);
     const ws = new WebSocket(url);
 
     ws.onopen = () => {
-      console.log("[WebSocket] Connected for execution", executionId);
       setWsConnected(true);
       toast.info("Real-time connection established.");
     };
 
     ws.onmessage = (event) => {
       try {
-        // 1. Parse the outer message structure
         const outerMessage: WebSocketMessageStructure = JSON.parse(event.data);
-        const event_type = outerMessage.event_type;
-        const timestampStr = outerMessage.timestamp; // String float timestamp
-        const innerData = outerMessage.data; // Inner data payload
+        const executionEvent = normalizeBackendEvent(outerMessage);
+        applyExecutionEvent(executionEvent);
 
-        // 2. Parse the inner data payload if it's a string, otherwise use as-is
-        const eventData =
-          typeof innerData === "string"
-            ? JSON.parse(innerData || "{}")
-            : innerData;
-
-        // Derive event type suffix (e.g., 'started', 'completed')
-        const eventTypeSuffix = event_type.includes(".")
-          ? event_type.split(".").pop()
-          : event_type;
-
-        const executionEvent: ExecutionEvent = {
-          // Generate a more robust unique ID
-          id: `${eventData.execution_id}-${
-            eventData.node_id || "workflow"
-          }-${event_type}-${timestampStr}`,
-          workflowId: eventData.workflow_id,
-          executionId: eventData.execution_id,
-          nodeId: eventData.node_id, // Can be undefined for workflow events
-          eventType: event_type as EventTypeName, // Use the full event type string
-          timestamp: new Date(parseFloat(timestampStr) * 1000).toISOString(),
-          // Use result on completed, error on failed, otherwise keep the whole payload for context
-          data: eventData.result ?? eventData.error ?? eventData,
-          error: eventData.error, // Explicitly store error if present
-        };
-
-        addEvent(executionEvent);
-
-        // Update node status based on event type
-        if (executionEvent.nodeId && eventTypeSuffix) {
-          // Mapping event suffixes to NodeStatus
-          const statusMap: Record<string, NodeStatus> = {
-            started: "running",
-            completed: "completed",
-            failed: "failed",
-            requested: "waiting_approval", // For approval.requested
-            // Add mappings for granted/denied if needed for UI
-            granted: "completed", // Or a custom 'approved' status
-            denied: "failed", // Or a custom 'rejected' status
-          };
-          const newStatus = statusMap[eventTypeSuffix];
-          if (newStatus) {
-            updateNodeStatus(executionEvent.nodeId, newStatus);
-          }
-        }
-
-        // Handle workflow completion/failure
-        if (event_type === "workflow.completed") {
-          toast.success("Workflow Completed Successfully!");
-          setMode("completed");
-          // Use eventData.result from the inner payload
-          setOutput({ status: "completed", result: eventData.result });
-          ws.close(); // Close WS on completion
-        } else if (event_type === "workflow.failed") {
-          toast.error("Workflow Failed", {
-            description: eventData.error || "Unknown error",
+        if (executionEvent.eventType === "workflow.completed") {
+          toast.success("Workflow completed successfully.");
+          ws.close();
+        } else if (executionEvent.eventType === "workflow.failed") {
+          toast.error("Workflow failed", {
+            description: executionEvent.error || "Unknown error",
           });
-          setMode("failed");
-          // Use eventData.error from the inner payload
-          setOutput({ status: "failed", result: eventData.error });
-          ws.close(); // Close WS on failure
+          ws.close();
+        } else if (isApprovalRequestedEvent(executionEvent.eventType)) {
+          toast.info("Approval required before the workflow continues.");
         }
-
-        // Handle UI Approval Request
-        // Use the specific event type from activities.py
-        if (event_type === "ui.approval.requested") {
-          const approvalRequest: ApprovalRequest = {
-            id: eventData.approval_id, // Use the ID from the event data
-            executionId: eventData.execution_id,
-            nodeId: eventData.node_id,
-            title: eventData.title || "Approval Required", // Use title from event
-            description: eventData.description || "Please review.", // Use description
-            context: eventData.context || {}, // Use context from event
-            status: "pending",
-            requestedAt: executionEvent.timestamp, // Use event timestamp
-          };
-          updateNodeStatus(eventData.node_id, "waiting_approval"); // Ensure node shows waiting status
-          setCurrentApproval(approvalRequest);
-        }
-      } catch (error) {
-        console.error(
-          "[WebSocket] Failed to parse message:",
-          error,
-          "Raw data:",
-          event.data
-        );
+      } catch {
         toast.error("Failed to process workflow event.");
       }
     };
 
-    ws.onerror = (errorEvent) => {
-      console.error("[WebSocket] Error:", errorEvent);
+    ws.onerror = () => {
       toast.error("WebSocket connection error.");
       setWsConnected(false);
-      setMode("failed"); // Consider the execution failed if WS disconnects unexpectedly
     };
 
     ws.onclose = (closeEvent) => {
-      console.log(
-        "[WebSocket] Connection closed",
-        closeEvent.code,
-        closeEvent.reason
-      );
       setWsConnected(false);
-      // Don't automatically set to failed/completed here unless the code indicates an error
       if (closeEvent.code !== 1000 && closeEvent.code !== 1005) {
-        // 1000 = Normal closure, 1005 = No status received
         toast.warning("WebSocket connection closed unexpectedly.");
       }
     };
 
     wsRef.current = ws;
 
-    // Cleanup function
     return () => {
       if (wsRef.current) {
-        console.log(
-          "[WebSocket] Cleaning up connection for execution",
-          executionId
-        );
-        wsRef.current.close(1000, "Component unmounting"); // Normal closure
+        wsRef.current.close(1000, "Component unmounting");
         wsRef.current = null;
         setWsConnected(false);
       }
     };
-  }, [
-    executionId,
-    enabled,
-    addEvent,
-    updateNodeStatus,
-    setWsConnected,
-    setMode,
-    setCurrentApproval,
-    setOutput,
-  ]);
+  }, [executionId, enabled, applyExecutionEvent, setWsConnected]);
 }

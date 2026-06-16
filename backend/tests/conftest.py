@@ -1,6 +1,14 @@
 import pytest
-from httpx import AsyncClient
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
 from unittest.mock import MagicMock, AsyncMock
+import os
+
+os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+os.environ.setdefault("TEMPORAL_HOST", "localhost:7233")
+os.environ.setdefault("TEMPORAL_NAMESPACE", "default")
+os.environ.setdefault("OPENAI_API_KEY", "test-key")
 
 # Mocking database session for tests
 @pytest.fixture
@@ -22,9 +30,19 @@ def mock_temporal_client():
     return client
 
 # Creating a test client for the FastAPI app
-@pytest.fixture
-async def test_client():
+@pytest_asyncio.fixture
+async def test_client(mock_db_session):
     """Creates an async test client for the FastAPI application."""
     from app.main import app
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    from app.core.database import get_db
+
+    def override_get_db():
+        yield mock_db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    transport = ASGITransport(app=app)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
+
+    app.dependency_overrides.clear()

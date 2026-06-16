@@ -6,21 +6,11 @@
 // Get API URL from environment variable with fallback
 export const API_URL = (() => {
   const url = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-  if (typeof window !== "undefined") {
-    console.log("🔗 API URL configured:", url);
-  }
-
   return url;
 })();
 
 export const WS_URL = (() => {
   const url = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
-
-  if (typeof window !== "undefined") {
-    console.log("🔌 WebSocket URL configured:", url);
-  }
-
   return url;
 })();
 
@@ -54,9 +44,7 @@ async function cleanupSession(sessionId: string) {
       method: "DELETE",
       keepalive: true, // Important: allows request to complete even after page unload
     });
-  } catch (error) {
-    console.error("Session cleanup failed:", error);
-  }
+  } catch {}
 }
 
 /**
@@ -112,7 +100,6 @@ export async function apiFetch<T = any>(
       return text as unknown as T;
     }
   } catch (error) {
-    console.error(`API Error [${path}]:`, error);
     throw error;
   }
 }
@@ -179,6 +166,8 @@ export const api = {
 
   // Metrics
   metrics: {
-    get: () => apiFetch("/api/metrics"),
+    summary: () => apiFetch("/api/metrics/summary"),
+    agents: () => apiFetch("/api/metrics/agents"),
+    get: () => apiFetch("/api/metrics/summary"),
   },
 };

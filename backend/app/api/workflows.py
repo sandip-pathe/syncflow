@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.models.workflow import Workflow, Execution
 from app.schemas.workflow import WorkflowCreateSchema, WorkflowExecuteSchema, WorkflowUpdateSchema
 from app.temporal.workflows import OrchestrationWorkflow
+from app.services.local_execution import LocalWorkflowExecutor
 from app.services.validation import validate_workflow
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
@@ -54,6 +55,12 @@ async def list_workflows(
         query = query.filter(Workflow.is_template == "true")
     
     workflows = query.all()
+    workflows.sort(
+        key=lambda workflow: (
+            workflow.id != "template-private-market-diligence",
+            workflow.name.lower(),
+        )
+    )
     return {"items": workflows}
 
 @router.delete("/session/{session_id}")
@@ -141,7 +148,7 @@ async def execute_workflow(
     # FIX: Pass the workflow.definition to the validation function
     errors = validate_workflow(workflow.definition)
     if errors:
-        print(f"❌ Workflow validation errors for {workflow_id}:")
+        print(f"Workflow validation errors for {workflow_id}:")
         for error in errors:
             print(f"   - {error}")
         raise HTTPException(
@@ -154,6 +161,24 @@ async def execute_workflow(
     
     db.add(execution)
     db.commit()
+
+    if settings.EXECUTION_BACKEND.lower() == "local":
+        result = LocalWorkflowExecutor().start(
+            db=db,
+            workflow_id=workflow_id,
+            workflow_def=workflow.definition,
+            execution=execution,
+            input_data=execute_request.input_data,
+        )
+        return {
+            "execution_id": execution_id,
+            "workflow_id": workflow_id,
+            "status": result["status"],
+            "execution_backend": "local",
+            "events": result.get("events", []),
+            "output": result.get("output"),
+            "pending_approval": result.get("pending_approval"),
+        }
     
     # Start Temporal workflow
     client = await get_temporal_client()
@@ -168,7 +193,8 @@ async def execute_workflow(
     return {
         "execution_id": execution_id,
         "workflow_id": workflow_id,
-        "status": "running"
+        "status": "running",
+        "execution_backend": "temporal",
     }
 
 @router.post("/{workflow_id}/pause")
@@ -252,11 +278,19 @@ async def update_workflow(
         db_workflow.name = update_data["name"]
     if "description" in update_data:
         db_workflow.description = update_data["description"]
+
+    transient_node_fields = {"status", "lastResult", "cost", "executionTime"}
+    sanitized_nodes = []
+    for node in update_data.get("nodes", []):
+        node_data = dict(node.get("data") or {})
+        for field in transient_node_fields:
+            node_data.pop(field, None)
+        sanitized_nodes.append({**node, "data": node_data})
     
     # Update the definition field with the new nodes and edges
     # This replaces the entire 'definition' JSONB field.
     db_workflow.definition = {
-        "nodes": [n for n in update_data.get("nodes", [])],
+        "nodes": sanitized_nodes,
         "edges": [e for e in update_data.get("edges", [])]
     }
 

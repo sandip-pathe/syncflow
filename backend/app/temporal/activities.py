@@ -490,7 +490,7 @@ async def request_ui_approval(node: dict, activity_context: dict) -> dict:
     approval_id = str(uuid4())
 
     # Publish HITL request event
-    await event_bus.publish("hitl.approval.requested", {
+    await event_bus.publish("approval.requested", {
         "workflow_id": activity_context.get("workflow_id"),
         "execution_id": activity_context.get("execution_id"),
         "node_id": node.get("id"),

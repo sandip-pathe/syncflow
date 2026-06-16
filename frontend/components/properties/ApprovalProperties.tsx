@@ -17,57 +17,67 @@ export function ApprovalProperties({
 }: ApprovalPropertiesProps) {
   return (
     <div className="space-y-4">
-      {/* Name */}
       <div className="space-y-2">
         <Label>Name</Label>
         <Input
           value={config.name || ""}
           onChange={(e) => onUpdate("name", e.target.value)}
-          placeholder="e.g., Legal Review"
-          className="bg-gray-800 border-gray-700 text-white"
+          placeholder="e.g., Reviewer Approval"
+          className="border-slate-200 bg-white text-slate-950"
         />
-        <p className="text-xs text-gray-400">Required - Approval step title</p>
+        <p className="text-xs text-slate-500">Required approval step title</p>
       </div>
 
-      {/* Description */}
       <div className="space-y-2">
         <Label>Description</Label>
         <Textarea
           value={config.description || ""}
           onChange={(e) => onUpdate("description", e.target.value)}
-          placeholder="Please review the contract and approve to proceed..."
+          placeholder="Review the previous step output before continuing..."
           rows={4}
-          className="bg-gray-800 border-gray-700 text-white"
+          className="border-slate-200 bg-white text-slate-950"
         />
-        <p className="text-xs text-gray-400">
-          Required - Instructions for the approver
+        <p className="text-xs text-slate-500">
+          Required instructions for the approver
         </p>
       </div>
 
-      {/* Info Box */}
-      <div className="mt-4 p-3 bg-orange-900/20 rounded border border-orange-700">
+      <div className="space-y-2">
+        <Label>Approver</Label>
+        <Input
+          value={config.approver_email || ""}
+          onChange={(e) => onUpdate("approver_email", e.target.value)}
+          placeholder="reviewer@example.com"
+          className="border-slate-200 bg-white text-slate-950"
+        />
+        <p className="text-xs text-slate-500">
+          Required for validation and local approval routing
+        </p>
+      </div>
+
+      <div className="rounded border border-amber-200 bg-amber-50 p-3">
         <div className="flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
-          <div className="text-xs text-orange-300 space-y-1">
-            <p className="font-semibold">Approval Flow:</p>
+          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-700" />
+          <div className="space-y-1 text-xs text-amber-800">
+            <p className="font-semibold">Approval flow</p>
             <p>
-              Workflow pauses at this node until a user approves or rejects via
-              the UI or API
+              Workflow pauses at this node until a reviewer approves or rejects
+              through the UI or API.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="mt-4 p-3 bg-blue-900/20 rounded border border-blue-700">
-        <p className="text-xs text-blue-300">
-          ⚡ Connect <strong>approve</strong> and <strong>reject</strong>{" "}
-          handles to different nodes
+      <div className="rounded border border-blue-200 bg-blue-50 p-3">
+        <p className="text-xs text-blue-800">
+          Connect <strong>approve</strong> and <strong>reject</strong> handles
+          to different nodes when the workflow needs separate paths.
         </p>
       </div>
 
-      <div className="mt-4 p-3 bg-gray-800 rounded border border-gray-700">
-        <p className="text-xs text-gray-400">
-          💡 Previous nodes output will be shown as context to the approver
+      <div className="rounded border border-slate-200 bg-slate-50 p-3">
+        <p className="text-xs text-slate-600">
+          Previous node output is shown as context to the approver.
         </p>
       </div>
     </div>

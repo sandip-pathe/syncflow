@@ -6,6 +6,136 @@ import uuid
 
 def get_workflow_templates() -> List[Dict[str, Any]]:
     """Get all pre-built workflow templates with frontend-compatible schema"""
+
+    diligence_trigger = "diligence-trigger"
+    diligence_extract = "diligence-extract-claims"
+    diligence_eval = "diligence-eval"
+    diligence_approval = "diligence-approval"
+    diligence_memo = "diligence-ic-memo"
+    diligence_end = "diligence-end"
+
+    diligence_template = {
+        "id": "template-private-market-diligence",
+        "name": "Private Market Diligence Review",
+        "description": "Extract claims, flag risks, require human approval, and draft an IC memo with audit-ready execution metadata.",
+        "is_template": True,
+        "definition": {
+            "nodes": [
+                {
+                    "id": diligence_trigger,
+                    "type": "trigger",
+                    "position": {"x": 32, "y": 260},
+                    "data": {
+                        "label": "Diligence Notes",
+                        "type": "trigger",
+                        "status": "idle",
+                        "config": {
+                            "name": "Diligence Notes",
+                            "type": "manual",
+                            "input_text": (
+                                "Company memo: Revenue grew 42% YoY, gross retention is above 90%, "
+                                "enterprise pipeline is concentrated in six accounts, and AI automation "
+                                "is expected to drive expansion margin."
+                            )
+                        }
+                    }
+                },
+                {
+                    "id": diligence_extract,
+                    "type": "agent",
+                    "position": {"x": 260, "y": 260},
+                    "data": {
+                        "label": "Extract Claims & Risks",
+                        "type": "agent",
+                        "status": "idle",
+                        "config": {
+                            "name": "Extract Claims & Risks",
+                            "system_instructions": "Extract material claims, risks, assumptions, and missing evidence from private-market diligence notes.",
+                            "temperature": 0.2,
+                            "expected_output_format": "structured diligence findings",
+                            "provider": "custom",
+                            "agent_id": "local-diligence-analyst"
+                        }
+                    }
+                },
+                {
+                    "id": diligence_eval,
+                    "type": "eval",
+                    "position": {"x": 488, "y": 260},
+                    "data": {
+                        "label": "Risk Completeness Eval",
+                        "type": "eval",
+                        "status": "idle",
+                        "config": {
+                            "name": "Risk Completeness Eval",
+                            "eval_type": "policy",
+                            "config": {
+                                "policy_rules": [
+                                    {"type": "confidence_threshold", "min_confidence": 0.75}
+                                ]
+                            },
+                            "on_failure": "warn"
+                        }
+                    }
+                },
+                {
+                    "id": diligence_approval,
+                    "type": "approval",
+                    "position": {"x": 716, "y": 260},
+                    "data": {
+                        "label": "Partner Review",
+                        "type": "approval",
+                        "status": "idle",
+                        "config": {
+                            "name": "Partner Review",
+                            "description": "Review flagged diligence risks before generating the IC memo section.",
+                            "approver_email": "partner-review@syncflow.local"
+                        }
+                    }
+                },
+                {
+                    "id": diligence_memo,
+                    "type": "agent",
+                    "position": {"x": 944, "y": 260},
+                    "data": {
+                        "label": "Draft IC Memo",
+                        "type": "agent",
+                        "status": "idle",
+                        "config": {
+                            "name": "Draft IC Memo",
+                            "system_instructions": "Write a concise investment committee memo section from approved diligence findings.",
+                            "temperature": 0.3,
+                            "expected_output_format": "IC memo bullets",
+                            "provider": "custom",
+                            "agent_id": "local-ic-memo-writer"
+                        }
+                    }
+                },
+                {
+                    "id": diligence_end,
+                    "type": "end",
+                    "position": {"x": 1172, "y": 260},
+                    "data": {
+                        "label": "Audit-Ready Memo",
+                        "type": "end",
+                        "status": "idle",
+                        "config": {
+                            "name": "Audit-Ready Memo",
+                            "capture_output": True,
+                            "show_output": True
+                        }
+                    }
+                }
+            ],
+            "edges": [
+                {"id": "d1", "source": diligence_trigger, "target": diligence_extract},
+                {"id": "d2", "source": diligence_extract, "target": diligence_eval},
+                {"id": "d3", "source": diligence_eval, "target": diligence_approval},
+                {"id": "d4", "source": diligence_approval, "target": diligence_memo, "sourceHandle": "approve"},
+                {"id": "d5", "source": diligence_memo, "target": diligence_end}
+            ]
+        }
+    }
     
     # Template 1: Simple Sentiment Analysis
     t1_id = "template-sentiment-analysis"
@@ -15,7 +145,7 @@ def get_workflow_templates() -> List[Dict[str, Any]]:
     
     template1 = {
         "id": t1_id,
-        "name": "📊 Sentiment Analysis Pipeline",
+        "name": "Sentiment Analysis Pipeline",
         "description": "Analyze customer feedback sentiment using OpenAI GPT-4",
         "is_template": True,
         "definition": {
@@ -84,7 +214,7 @@ def get_workflow_templates() -> List[Dict[str, Any]]:
     
     template2 = {
         "id": t2_id,
-        "name": "🔬 Multi-Agent Research Team",
+        "name": "Multi-Agent Research Team",
         "description": "Three AI agents collaborate on research: Researcher, Analyst, Writer",
         "is_template": True,
         "definition": {
@@ -186,7 +316,7 @@ def get_workflow_templates() -> List[Dict[str, Any]]:
     
     template3 = {
         "id": t3_id,
-        "name": "🛡️ AI Content Moderation",
+        "name": "AI Content Moderation",
         "description": "AI screening with human approval for questionable content",
         "is_template": True,
         "definition": {
@@ -233,7 +363,7 @@ def get_workflow_templates() -> List[Dict[str, Any]]:
                         "config": {
                             "name": "Manual Review",
                             "message": "Content needs review",
-                            "approver_email": "workflow.orchestrator@lyzr.ai"
+                            "approver_email": "approvals@syncflow.local"
                         }
                     }
                 },
@@ -261,4 +391,4 @@ def get_workflow_templates() -> List[Dict[str, Any]]:
         }
     }
     
-    return [template1, template2, template3]
+    return [diligence_template, template1, template2, template3]
