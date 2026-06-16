@@ -28,6 +28,11 @@ coverage/
 *.egg-info/
 *.egg
 
+# Local QA/design scratch artifacts
+.gstack/
+artifacts/
+design-audit-current.png
+
 # OS junk
 Thumbs.db
 .DS_Store
